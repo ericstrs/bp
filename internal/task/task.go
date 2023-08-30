@@ -64,6 +64,18 @@ type Taskable interface {
 	SetDone(b bool)
 }
 
+// A Tasktlist represents a list of tasks.
+type TaskList interface {
+	// Add adds a task to the list.
+	Add(task Taskable) error
+	// Remove removes a task from the list.
+	Remove(id int) error
+	// Move moves a task to another location in the list.
+	Move(to int)
+	// Sort sorts the list of tasks.
+	Sort()
+}
+
 // A Task is the representation of a basic task.
 type Task struct {
 	id          int       // unique identifier
