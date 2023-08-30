@@ -34,24 +34,71 @@ import "time"
 
 // The Taskable type describes the methods a task must implement.
 type Taskable interface {
-	ID() string
+	// ID returns the unique identifier of the task.
+	ID() int
+	// SetID sets the unique identifier of the task.
+	SetID(id int)
+	// Name returns the name of the task.
 	Name() string
-	SetName(t string)
+	// SetName sets the name of the task.
+	SetName(s string)
+	// Description returns the description of the task.
 	Description() string
+	// SetDescription sets the description of the task.
 	SetDescription(d string)
-	IsComplete() bool
-	SetComplete(c bool)
+	// DoneDate returns the date when the task was last finished.
+	Finished() time.Time
+	// SetFinished sets the date when the task was last finished.
+	SetFinished(d time.Time)
+	// Started returns the date when the task was last started.
+	Started() time.Time
+	// SetStarted sets the date when the task was last started.
+	SetStarted(d time.Time)
+	// Priority returns the priority of the task.
 	Priority() int
+	// SetPriority sets the priority of the task.
 	SetPriority(p int)
+	// IsDone returns whether or not the task is finished.
+	IsDone() bool
+	// SetDone sets the task "finished" status to true.
+	SetDone(b bool)
 }
 
 // A Task is the representation of a basic task.
 type Task struct {
-	ID           int       // unique identifier
-	Name         string    // task name
-	Description  string    // task description
-	CreationDate time.Time // date task was created
-	Completion   time.Time // date task was completed
-	Priority     int       // Determines task urgency. Lower numbers indicate higher priority.
-	Complete     bool      // used to signify when a task has been completed
+	id          int       // unique identifier
+	name        string    // task name
+	description string    // task description
+	started     time.Time // date task was created
+	finished    time.Time // date task was finished
+	priority    int       // Determines task urgency. Lower numbers indicate higher priority.
+	done        bool      // used to signify when a task it done
 }
+
+func (t Task) ID() int { return t.id }
+
+func (t *Task) SetID(id int) { t.id = id }
+
+func (t Task) Name() string { return t.name }
+
+func (t *Task) SetName(s string) { t.name = s }
+
+func (t Task) Description() string { return t.description }
+
+func (t *Task) SetDescription(d string) { t.description = d }
+
+func (t Task) Finished() time.Time { return t.finished }
+
+func (t *Task) SetFinished(d time.Time) { t.finished = d }
+
+func (t Task) Started() time.Time { return t.started }
+
+func (t *Task) SetStarted(d time.Time) { t.started = d }
+
+func (t Task) Priority() int { return t.priority }
+
+func (t *Task) SetPriority(p int) { t.priority = p }
+
+func (t Task) IsDone() bool { return t.done }
+
+func (t *Task) SetDone(b bool) { t.done = b }
