@@ -40,6 +40,7 @@ func (t *TodoList) UpdatePriorities(start int) error {
 
 	// Wait for all goroutines to complete
 	wg.Wait()
+	return nil
 }
 
 func (t *TodoList) Add(task *TodoTask, index int) error {
