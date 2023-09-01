@@ -66,14 +66,40 @@ type Taskable interface {
 
 // A Tasktlist represents a list of tasks.
 type TaskList interface {
-	// Add adds a task to the list.
-	Add(task Taskable) error
-	// Remove removes a task from the list.
-	Remove(id int) error
-	// Move moves a task to another location in the list.
-	Move(to int)
-	// Sort sorts the list of tasks.
-	Sort()
+	// Bounds check if an index is within range.
+	Bounds(index int) error
+	// UpdatePriorities updates the priorities of tasks from the given
+	// start index.
+	UpdatePriorities(start int) error
+
+	// Add adds a task to the list at a given index.
+	//
+	// Important Considerations:
+	//
+	//	1. Update Priority: The removal of a task can affect the
+	//     priorities of the remaining tasks. Calling [Sort] post-removal
+	//     should be done to update task priorities accordingly.
+	//
+	// Note: The priority updating of the tasks in the list is assumed to
+	// be handled outside this function, and should be addressed post-add
+	// operation.
+	Add(task *Taskable, index int) error
+
+	// Remove removes a task from the list by its index and returns the
+	// returned task for buffering.
+	//
+	// Important Considerations:
+	//
+	//  1. Buffering. This function returns the removed task, which should
+	//     be buffered for potential future reinsertion.
+	//  2. Update Priority: The removal of a task can affect the
+	//     priorities of the remaining tasks. Calling [Sort] post-removal
+	//     should be done to update task priorities accordingly.
+	//
+	// Note: The buffering of the removed task and priority updating is
+	// assumed to be handled outside this function, and they should be
+	// addressed post-removal operation.
+	Remove(index int) (*Taskable, error)
 }
 
 // A Task is the representation of a basic task.
