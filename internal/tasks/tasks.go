@@ -66,6 +66,12 @@ type Taskable interface {
 
 // A Tasktlist represents a list of tasks.
 type TaskList interface {
+	// Title returns the title of the task list.
+	Title() string
+	// SetTitle sets the title of the task list.
+	SetTitle(s string)
+	// Tasks returns the list of tasks.
+	Tasks() []Taskable
 	// Bounds check if an index is within range.
 	Bounds(index int) error
 	// UpdatePriorities updates the priorities of tasks from the given
