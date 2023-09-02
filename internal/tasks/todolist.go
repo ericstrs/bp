@@ -18,6 +18,27 @@ type TodoList struct {
 	buffer *TodoTask
 }
 
+// SetTask sets the general task.
+func (task *TodoTask) SetTask(t *Task) { task.Task = t }
+
+// IsCore returns whether or not a task is a "core" task.
+func (task *TodoTask) IsCore() bool { return task.isCore }
+
+// SetCore sets whether or not a task is a "core" task.
+func (task *TodoTask) SetCore(b bool) { task.isCore = b }
+
+func (t *TodoList) Title() string { return t.title }
+
+func (t *TodoList) SetTitle(s string) { t.title = s }
+
+func (t *TodoList) Tasks() []TodoTask { return t.tasks }
+
+// Buffer returns the buffered task.
+func (t *TodoList) Buffer() *TodoTask { return t.buffer }
+
+// SetBuffer sets the buffered task.
+func (t *TodoList) SetBuffer(task *TodoTask) { t.buffer = task }
+
 func (t *TodoList) UpdatePriorities(start int) error {
 	if err := t.Bounds(start); err != nil {
 		return fmt.Errorf("Failed to update task priorities: %v\n", err)
