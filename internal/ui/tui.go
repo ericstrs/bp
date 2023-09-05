@@ -199,6 +199,9 @@ func (t *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
 			form := t.createListForm(t.list.GetCurrentItem())
 			t.showModal(form)
 			return
+		case 'e': // Edit task
+			form := t.editListForm(t.list.GetCurrentItem())
+			t.showModal(form)
 		case 'x': // Toggle task completion status
 			task.SetDone(!task.IsDone())
 			task.SetFinished(time.Now()) // set done date to current date
@@ -213,7 +216,6 @@ func (tui *TUI) listBoardInputCapture(event *tcell.EventKey) {
 	switch event.Key() {
 	case tcell.KeyRune:
 		switch event.Rune() {
-		case 'e': // Edit task
 		case 'd': // Delete task
 		case 'p': // Paste task
 		case ' ': // Open task details or board
@@ -270,6 +272,48 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 		task.SetPriority(currentIdx + 1)
 		t.taskData.Add(task, currentIdx+1)
 		t.taskData.UpdatePriorities(currentIdx + 1)
+
+		// Update tview list
+		t.filterAndUpdateList()
+	})
+
+	form.AddButton("Cancel", func() {
+		// Close the modal without doing anything
+		t.closeModal()
+	})
+
+	return form
+}
+
+// editListForm creates and returns a tview form for creating a new
+// todo list task.
+func (t *TUI) editListForm(currentIdx int) *tview.Form {
+	var name, description string
+	var isCore bool
+	tasks := t.taskData.Tasks()
+	task := &tasks[currentIdx]
+
+	form := tview.NewForm()
+	form.SetBorder(true)
+	form.SetTitle("Edit Task")
+
+	form.AddInputField("Name", task.Name(), 20, nil, func(text string) {
+		name = text
+	})
+	form.AddInputField("Description", task.Description(), 50, nil, func(text string) {
+		description = text
+	})
+	form.AddCheckbox("Is Core Task", task.IsCore(), func(checked bool) {
+		isCore = checked
+	})
+
+	form.AddButton("Save", func() {
+		t.closeModal()
+
+		// Update task in data slice
+		task.SetName(name)
+		task.SetDescription(description)
+		task.SetCore(isCore)
 
 		// Update tview list
 		t.filterAndUpdateList()
