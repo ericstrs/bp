@@ -21,8 +21,6 @@ type TUI struct {
 
 	list     *tview.List
 	taskData *tasks.TodoList
-
-	listTaskForm *tview.Form
 }
 
 // Init intializes the tview app and sets up the UI.
@@ -42,7 +40,7 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 		SetRows(0).
 		SetColumns(0).
 		AddItem(tui.list, 0, 0, 1, 1, 0, 0, true)
-	tui.leftPanel.SetTitle("Daily TODOs")
+	tui.leftPanel.SetTitle(tui.taskData.Title())
 	tui.leftPanel.SetBorder(true)
 
 	// Initialize the right panel with a simple text view
@@ -191,22 +189,20 @@ func (tui *TUI) globalInputCapture(event *tcell.EventKey, task *tasks.TodoTask) 
 }
 
 // listInputCapture captures input interactions specific to the list.
-func (tui *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
-	tui.listBoardInputCapture(event)
+func (t *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
+	t.listBoardInputCapture(event)
 
 	switch event.Key() {
 	case tcell.KeyRune:
 		switch event.Rune() {
 		case 'a': // Create new task
-			// Create a new modal and add it to pages.
-			modal := tui.createListFormModal(tui.list.GetCurrentItem())
-			tui.pages.AddPage("modal", modal, true, true)
-			tui.app.SetFocus(modal)
+			form := t.createListForm(t.list.GetCurrentItem())
+			t.showModal(form)
 			return
 		case 'x': // Toggle task completion status
 			task.SetDone(!task.IsDone())
 			task.SetFinished(time.Now()) // set done date to current date
-			tui.filterAndUpdateList()
+			t.filterAndUpdateList()
 		}
 	}
 }
@@ -225,9 +221,8 @@ func (tui *TUI) listBoardInputCapture(event *tcell.EventKey) {
 	}
 }
 
-// createListFormModal creates a tview form and returns a tview modal
-// containing the form.
-func (t *TUI) createListFormModal(currentIdx int) tview.Primitive {
+// showModal sets up a modal grid for the given form and displays it.
+func (t *TUI) showModal(form *tview.Form) {
 	// Returns a new primitive which puts the provided primitive in the center and
 	// sets its size to the given width and height.
 	modal := func(p tview.Primitive, width, height int) tview.Primitive {
@@ -237,25 +232,34 @@ func (t *TUI) createListFormModal(currentIdx int) tview.Primitive {
 			AddItem(p, 1, 1, 1, 1, 0, 0, true)
 	}
 
+	m := modal(form, 40, 30)
+	t.pages.AddPage("modal", m, true, true)
+	t.app.SetFocus(m)
+}
+
+// createListForm creates and returns a tview form for creating a new
+// todo list task.
+func (t *TUI) createListForm(currentIdx int) *tview.Form {
 	var name, description string
 	var isCore bool
 
-	t.listTaskForm = tview.NewForm()
-	t.listTaskForm.SetBorder(true)
-	t.listTaskForm.SetTitle("Create New Task")
+	form := tview.NewForm()
+	form.SetBorder(true)
+	form.SetTitle("Create New Task")
 
-	t.listTaskForm.AddInputField("Name", "", 20, nil, func(text string) {
+	form.AddInputField("Name", "", 20, nil, func(text string) {
 		name = text
 	})
-	t.listTaskForm.AddInputField("Description", "", 50, nil, func(text string) {
+	form.AddInputField("Description", "", 50, nil, func(text string) {
 		description = text
 	})
-	t.listTaskForm.AddCheckbox("Is Core Task", false, func(checked bool) {
+	form.AddCheckbox("Is Core Task", false, func(checked bool) {
 		isCore = checked
 	})
 
-	t.listTaskForm.AddButton("Save", func() {
+	form.AddButton("Save", func() {
 		t.closeModal()
+
 		// Add task to task data slice
 		task := new(tasks.TodoTask)
 		task.SetTask(new(tasks.Task))
@@ -271,12 +275,12 @@ func (t *TUI) createListFormModal(currentIdx int) tview.Primitive {
 		t.filterAndUpdateList()
 	})
 
-	t.listTaskForm.AddButton("Cancel", func() {
+	form.AddButton("Cancel", func() {
 		// Close the modal without doing anything
 		t.closeModal()
 	})
 
-	return modal(t.listTaskForm, 40, 30)
+	return form
 }
 
 // closeModal removes that modal page and sets the focus back to the
