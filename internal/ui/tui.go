@@ -20,6 +20,7 @@ type TUI struct {
 	focusedPanel *tview.Grid
 
 	list     *tview.List
+	showDesc bool
 	taskData *tasks.TodoList
 }
 
@@ -29,8 +30,7 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	tui.taskData = tl
 
 	// Create a new list for todo tasks
-	tui.list = tview.NewList().
-		ShowSecondaryText(false)
+	tui.list = tview.NewList().ShowSecondaryText(false)
 
 	// Populate tui list with initial tasks
 	tui.Populate()
@@ -108,7 +108,7 @@ func (tui *TUI) filterAndUpdateList() {
 		}
 
 		// Add a task to the list
-		tui.list.AddItem(fmt.Sprintf("%s %s", prefix, task.Name()), "", 0, nil)
+		tui.list.AddItem(fmt.Sprintf("%s %s", prefix, task.Name()), task.Description(), 0, nil)
 	}
 }
 
@@ -191,7 +191,7 @@ func (tui *TUI) globalInputCapture(event *tcell.EventKey, task *tasks.TodoTask) 
 
 // listInputCapture captures input interactions specific to the list.
 func (t *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
-	t.listBoardInputCapture(event)
+	t.listBoardInputCapture(event, *task)
 
 	switch event.Key() {
 	case tcell.KeyRune:
@@ -208,7 +208,7 @@ func (t *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
 			task.SetFinished(time.Now()) // set done date to current date
 			t.filterAndUpdateList()
 		case 'd': // Delete task
-			// Delete task form task data slice
+			// Delete task from task data slice
 			task, err := t.taskData.Remove(t.list.GetCurrentItem())
 			if err != nil {
 				return
@@ -234,17 +234,19 @@ func (t *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
 
 			// Update tview todo list
 			t.filterAndUpdateList()
+		case ' ': // Toggle all task descriptions
+			t.showDesc = !t.showDesc
+			t.list.ShowSecondaryText(t.showDesc)
 		}
 	}
 }
 
 // listBoardInputCapture captures shared input interactions between
 // the list and kanban boards.
-func (tui *TUI) listBoardInputCapture(event *tcell.EventKey) {
+func (t *TUI) listBoardInputCapture(event *tcell.EventKey, task tasks.Taskable) {
 	switch event.Key() {
 	case tcell.KeyRune:
 		switch event.Rune() {
-		case ' ': // Open task details or board
 		}
 	}
 }
