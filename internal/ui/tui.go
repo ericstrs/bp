@@ -92,6 +92,7 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 // list is implemented.
 func (tui *TUI) filterAndUpdateList() {
 	tui.list.Clear()
+	// TODO: should probably firt sort the list by priority
 	for _, task := range tui.taskData.Tasks() {
 		prefix := "[ []"
 		createdToday := task.Started().Format("2006-01-02") == time.Now().Format("2006-01-02")
@@ -206,6 +207,33 @@ func (t *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
 			task.SetDone(!task.IsDone())
 			task.SetFinished(time.Now()) // set done date to current date
 			t.filterAndUpdateList()
+		case 'd': // Delete task
+			// Delete task form task data slice
+			task, err := t.taskData.Remove(t.list.GetCurrentItem())
+			if err != nil {
+				return
+			}
+			// Buffer returned deleted task
+			t.taskData.SetBuffer(task)
+
+			// Update task priorities
+			t.taskData.UpdatePriorities(t.list.GetCurrentItem())
+
+			// Update tview todo list
+			t.filterAndUpdateList()
+		case 'p': // Paste task
+			currentIdx := t.list.GetCurrentItem()
+			// Read from buffer
+			task := t.taskData.Buffer()
+
+			// Add task to the todo list
+			t.taskData.Add(task, currentIdx+1)
+
+			// Update task priorities
+			t.taskData.UpdatePriorities(currentIdx + 1)
+
+			// Update tview todo list
+			t.filterAndUpdateList()
 		}
 	}
 }
@@ -216,8 +244,6 @@ func (tui *TUI) listBoardInputCapture(event *tcell.EventKey) {
 	switch event.Key() {
 	case tcell.KeyRune:
 		switch event.Rune() {
-		case 'd': // Delete task
-		case 'p': // Paste task
 		case ' ': // Open task details or board
 		}
 	}
@@ -260,8 +286,6 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 	})
 
 	form.AddButton("Save", func() {
-		t.closeModal()
-
 		// Add task to task data slice
 		task := new(tasks.TodoTask)
 		task.SetTask(new(tasks.Task))
@@ -275,6 +299,8 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 
 		// Update tview list
 		t.filterAndUpdateList()
+
+		t.closeModal()
 	})
 
 	form.AddButton("Cancel", func() {
