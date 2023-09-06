@@ -21,7 +21,7 @@ type TUI struct {
 
 	list     *tview.List
 	showDesc bool
-	taskData *tasks.TodoList
+	taskData *tasks.TodoList `yaml:"todo_list"`
 }
 
 // Init intializes the tview app and sets up the UI.
@@ -40,7 +40,7 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 		SetRows(0).
 		SetColumns(0).
 		AddItem(tui.list, 0, 0, 1, 1, 0, 0, true)
-	tui.leftPanel.SetTitle(tui.taskData.Title())
+	tui.leftPanel.SetTitle(tui.taskData.GetTitle())
 	tui.leftPanel.SetBorder(true)
 
 	// Initialize the right panel with a simple text view
@@ -63,7 +63,7 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	// Create the main parent grid
 	tui.mainGrid = tview.NewGrid().
 		SetRows(0).
-		SetColumns(20, 1, 0).
+		SetColumns(25, 1, 0).
 		AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
 		AddItem(line, 0, 1, 1, 1, 0, 0, false).
 		AddItem(tui.rightPanel, 0, 2, 1, 1, 0, 0, false)
@@ -93,27 +93,27 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 func (tui *TUI) filterAndUpdateList() {
 	tui.list.Clear()
 
-	if len(tui.taskData.Tasks()) == 0 {
+	if len(tui.taskData.GetTasks()) == 0 {
 		tui.list.AddItem("No tasks available", "", 0, nil)
 	}
 
 	// TODO: should probably firt sort the list by priority
-	for _, task := range tui.taskData.Tasks() {
+	for _, task := range tui.taskData.GetTasks() {
 		prefix := "[ []"
-		createdToday := task.Started().Format("2006-01-02") == time.Now().Format("2006-01-02")
+		createdToday := task.GetStarted().Format("2006-01-02") == time.Now().Format("2006-01-02")
 		// If task is completed and not created today, then don't add it to
 		// the tview list.
-		if task.IsDone() && !createdToday {
+		if task.GetIsDone() && !createdToday {
 			continue
 		}
 
 		// If task if completed and created today, then mark it complete.
-		if task.IsDone() && createdToday {
+		if task.GetIsDone() && createdToday {
 			prefix = "[x[]"
 		}
 
 		// Add a task to the list
-		tui.list.AddItem(fmt.Sprintf("%s %s", prefix, task.Name()), task.Description(), 0, nil)
+		tui.list.AddItem(fmt.Sprintf("%s %s", prefix, task.GetName()), task.GetDescription(), 0, nil)
 	}
 }
 
@@ -207,9 +207,9 @@ func (t *TUI) listInputCapture(event *tcell.EventKey) {
 			form := t.editListForm(t.list.GetCurrentItem())
 			t.showModal(form)
 		case 'x': // Toggle task completion status
-			tasks := t.taskData.Tasks()
+			tasks := t.taskData.GetTasks()
 			task := tasks[t.list.GetCurrentItem()]
-			task.SetDone(!task.IsDone())
+			task.SetDone(!task.GetIsDone())
 			task.SetFinished(time.Now()) // set done date to current date
 			t.filterAndUpdateList()
 		case 'd': // Delete task
@@ -323,20 +323,20 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 func (t *TUI) editListForm(currentIdx int) *tview.Form {
 	var name, description string
 	var isCore bool
-	tasks := t.taskData.Tasks()
+	tasks := t.taskData.GetTasks()
 	task := &tasks[currentIdx]
 
 	form := tview.NewForm()
 	form.SetBorder(true)
 	form.SetTitle("Edit Task")
 
-	form.AddInputField("Name", task.Name(), 20, nil, func(text string) {
+	form.AddInputField("Name", task.GetName(), 20, nil, func(text string) {
 		name = text
 	})
-	form.AddInputField("Description", task.Description(), 50, nil, func(text string) {
+	form.AddInputField("Description", task.GetDescription(), 50, nil, func(text string) {
 		description = text
 	})
-	form.AddCheckbox("Is Core Task", task.IsCore(), func(checked bool) {
+	form.AddCheckbox("Is Core Task", task.GetIsCore(), func(checked bool) {
 		isCore = checked
 	})
 

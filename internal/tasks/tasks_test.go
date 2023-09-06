@@ -5,10 +5,10 @@ import (
 	"time"
 )
 
-func ExampleID() {
+func ExampleGetID() {
 	var t Task
-	t = Task{id: 1}
-	fmt.Println(t.ID())
+	t = Task{Id: 1}
+	fmt.Println(t.GetID())
 
 	// Output:
 	// 1
@@ -16,18 +16,18 @@ func ExampleID() {
 
 func ExampleSetID() {
 	var t Task
-	t = Task{id: 1}
+	t = Task{Id: 1}
 	t.SetID(2)
-	fmt.Println(t.id)
+	fmt.Println(t.Id)
 
 	// Output:
 	// 2
 }
 
-func ExampleName() {
+func ExampleGetName() {
 	var t Task
-	t = Task{name: "Buy groceries"}
-	fmt.Printf("Task name: %q\n", t.Name())
+	t = Task{Name: "Buy groceries"}
+	fmt.Printf("Task name: %q\n", t.GetName())
 
 	// Output:
 	// Task name: "Buy groceries"
@@ -36,16 +36,16 @@ func ExampleName() {
 func ExampleSetName() {
 	var t Task
 	t.SetName("Clean room")
-	fmt.Printf("Task name: %q\n", t.name)
+	fmt.Printf("Task name: %q\n", t.Name)
 
 	// Output:
 	// Task name: "Clean room"
 }
 
-func ExampleDescription() {
+func ExampleGetDescription() {
 	var t Task
-	t = Task{description: "Buying groceries entails taking inventory of what you have and what you need, and then taking the trip to the store."}
-	fmt.Printf("Task description: %q\n", t.Description())
+	t = Task{Description: "Buying groceries entails taking inventory of what you have and what you need, and then taking the trip to the store."}
+	fmt.Printf("Task description: %q\n", t.GetDescription())
 
 	// Output:
 	// Task description: "Buying groceries entails taking inventory of what you have and what you need, and then taking the trip to the store."
@@ -54,16 +54,16 @@ func ExampleDescription() {
 func ExampleSetDescription() {
 	var t Task
 	t.SetDescription("Cleaning room consists of cleaing your desk and taking out the trash.")
-	fmt.Printf("Task description: %q\n", t.description)
+	fmt.Printf("Task description: %q\n", t.Description)
 
 	// Output:
 	// Task description: "Cleaning room consists of cleaing your desk and taking out the trash."
 }
 
-func ExampleFinished() {
+func ExampleGetFinished() {
 	var t Task
-	t = Task{finished: time.Date(2023, 8, 1, 12, 30, 0, 0, time.UTC)}
-	d := t.finished.Format("2006-01-02")
+	t = Task{Finished: time.Date(2023, 8, 1, 12, 30, 0, 0, time.UTC)}
+	d := t.GetFinished().Format("2006-01-02")
 	fmt.Printf("Date task last finished: %q\n", d)
 
 	// Output:
@@ -73,17 +73,17 @@ func ExampleFinished() {
 func ExampleSetFinished() {
 	var t Task
 	t.SetFinished(time.Date(2023, 8, 1, 0, 0, 0, 0, time.UTC))
-	d := t.finished.Format("2006-01-02")
+	d := t.Finished.Format("2006-01-02")
 	fmt.Printf("Date task last finished: %q\n", d)
 
 	// Output:
 	// Date task last finished: "2023-08-01"
 }
 
-func ExampleStarted() {
+func ExampleGetStarted() {
 	var t Task
-	t = Task{started: time.Date(2023, 8, 1, 0, 0, 0, 0, time.UTC)}
-	d := t.Started().Format("2006-01-02")
+	t = Task{Started: time.Date(2023, 8, 1, 0, 0, 0, 0, time.UTC)}
+	d := t.GetStarted().Format("2006-01-02")
 	fmt.Printf("Date task last started: %q\n", d)
 
 	// Output:
@@ -93,17 +93,17 @@ func ExampleStarted() {
 func ExampleSetStarted() {
 	var t Task
 	t.SetStarted(time.Date(2023, 8, 1, 0, 0, 0, 0, time.UTC))
-	d := t.started.Format("2006-01-02")
+	d := t.Started.Format("2006-01-02")
 	fmt.Printf("Date task last started: %q\n", d)
 
 	// Output:
 	// Date task last started: "2023-08-01"
 }
 
-func ExamplePriority() {
+func ExampleGetPriority() {
 	var t Task
-	t = Task{priority: 1}
-	fmt.Printf("Task priority: %d\n", t.priority)
+	t = Task{Priority: 1}
+	fmt.Printf("Task priority: %d\n", t.Priority)
 
 	// Output:
 	// Task priority: 1
@@ -112,16 +112,16 @@ func ExamplePriority() {
 func ExampleSetPriority() {
 	var t Task
 	t.SetPriority(1)
-	fmt.Printf("Task priority: %d\n", t.priority)
+	fmt.Printf("Task priority: %d\n", t.Priority)
 
 	// Output:
 	// Task priority: 1
 }
 
-func ExampleIsDone() {
+func ExampleGetIsDone() {
 	var t Task
-	t = Task{done: true}
-	fmt.Printf("Task done status: %v\n", t.IsDone())
+	t = Task{Done: true}
+	fmt.Printf("Task done status: %v\n", t.GetIsDone())
 
 	// Output:
 	// Task done status: true
@@ -130,7 +130,7 @@ func ExampleIsDone() {
 func ExampleSetDone() {
 	var t Task
 	t.SetDone(true)
-	fmt.Printf("Task done status: %v\n", t.IsDone())
+	fmt.Printf("Task done status: %v\n", t.GetIsDone())
 
 	// Output:
 	// Task done status: true

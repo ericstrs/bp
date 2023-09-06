@@ -35,31 +35,31 @@ import "time"
 // The Taskable type describes the methods a task must implement.
 type Taskable interface {
 	// ID returns the unique identifier of the task.
-	ID() int
+	GetID() int
 	// SetID sets the unique identifier of the task.
 	SetID(id int)
 	// Name returns the name of the task.
-	Name() string
+	GetName() string
 	// SetName sets the name of the task.
 	SetName(s string)
 	// Description returns the description of the task.
-	Description() string
+	GetDescription() string
 	// SetDescription sets the description of the task.
 	SetDescription(d string)
 	// DoneDate returns the date when the task was last finished.
-	Finished() time.Time
+	GetFinished() time.Time
 	// SetFinished sets the date when the task was last finished.
 	SetFinished(d time.Time)
 	// Started returns the date when the task was last started.
-	Started() time.Time
+	GetStarted() time.Time
 	// SetStarted sets the date when the task was last started.
 	SetStarted(d time.Time)
 	// Priority returns the priority of the task.
-	Priority() int
+	GetPriority() int
 	// SetPriority sets the priority of the task.
 	SetPriority(p int)
 	// IsDone returns whether or not the task is finished.
-	IsDone() bool
+	GetIsDone() bool
 	// SetDone sets the task "finished" status to true.
 	SetDone(b bool)
 }
@@ -67,11 +67,11 @@ type Taskable interface {
 // A Tasktlist represents a list of tasks.
 type TaskList interface {
 	// Title returns the title of the task list.
-	Title() string
+	GetTitle() string
 	// SetTitle sets the title of the task list.
 	SetTitle(s string)
 	// Tasks returns the list of tasks.
-	Tasks() []Taskable
+	GetTasks() []Taskable
 	// Bounds check if an index is within range.
 	Bounds(index int) error
 	// UpdatePriorities updates the priorities of tasks from the given
@@ -83,8 +83,9 @@ type TaskList interface {
 	// Important Considerations:
 	//
 	//	1. Update Priority: The removal of a task can affect the
-	//     priorities of the remaining tasks. Calling [Sort] post-removal
-	//     should be done to update task priorities accordingly.
+	//     priorities of the remaining tasks. Calling [UpdatePriorities]
+	//     post-removal should be done to update task priorities
+	//     accordingly.
 	//
 	// Note: The priority updating of the tasks in the list is assumed to
 	// be handled outside this function, and should be addressed post-add
@@ -110,39 +111,40 @@ type TaskList interface {
 
 // A Task is the representation of a basic task.
 type Task struct {
-	id          int       // unique identifier
-	name        string    // task name
-	description string    // task description
-	started     time.Time // date task was created
-	finished    time.Time // date task was finished
-	priority    int       // Determines task urgency. Lower numbers indicate higher priority.
-	done        bool      // used to signify when a task it done
+	Id          int       `yaml:"id"`          // unique identifier
+	Name        string    `yaml:"name"`        // task name
+	Description string    `yaml:"description"` // task description
+	ShowDesc    bool      `yaml:"showDesc"`    // indicate whether or not to show task description
+	Started     time.Time `yaml:"started"`     // date task was created
+	Finished    time.Time `yaml:"finished"`    // date task was finished
+	Priority    int       `yaml:"priority"`    // Determines task urgency. Lower numbers indicate higher priority.
+	Done        bool      `yaml:"done"`        // used to signify when a task it done
 }
 
-func (t Task) ID() int { return t.id }
+func (t Task) GetID() int { return t.Id }
 
-func (t *Task) SetID(id int) { t.id = id }
+func (t *Task) SetID(id int) { t.Id = id }
 
-func (t Task) Name() string { return t.name }
+func (t Task) GetName() string { return t.Name }
 
-func (t *Task) SetName(s string) { t.name = s }
+func (t *Task) SetName(s string) { t.Name = s }
 
-func (t Task) Description() string { return t.description }
+func (t Task) GetDescription() string { return t.Description }
 
-func (t *Task) SetDescription(d string) { t.description = d }
+func (t *Task) SetDescription(d string) { t.Description = d }
 
-func (t Task) Finished() time.Time { return t.finished }
+func (t Task) GetFinished() time.Time { return t.Finished }
 
-func (t *Task) SetFinished(d time.Time) { t.finished = d }
+func (t *Task) SetFinished(d time.Time) { t.Finished = d }
 
-func (t Task) Started() time.Time { return t.started }
+func (t Task) GetStarted() time.Time { return t.Started }
 
-func (t *Task) SetStarted(d time.Time) { t.started = d }
+func (t *Task) SetStarted(d time.Time) { t.Started = d }
 
-func (t Task) Priority() int { return t.priority }
+func (t Task) GetPriority() int { return t.Priority }
 
-func (t *Task) SetPriority(p int) { t.priority = p }
+func (t *Task) SetPriority(p int) { t.Priority = p }
 
-func (t Task) IsDone() bool { return t.done }
+func (t Task) GetIsDone() bool { return t.Done }
 
-func (t *Task) SetDone(b bool) { t.done = b }
+func (t *Task) SetDone(b bool) { t.Done = b }

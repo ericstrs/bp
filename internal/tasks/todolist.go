@@ -7,14 +7,14 @@ import (
 
 type TodoTask struct {
 	*Task
-	isCore bool // Indicates if this task is a "core" task, meaning it recurs daily
+	IsCore bool `yaml:"isCore"` // Indicates if this task is a "core" task, meaning it recurs daily
 }
 
 var _ Taskable = &TodoTask{} // Compile-time check for interface satisfaction.
 
 type TodoList struct {
-	title  string
-	tasks  []TodoTask
+	Title  string     `yaml:"title"`
+	Tasks  []TodoTask `yaml:"tasks"`
 	buffer *TodoTask
 }
 
@@ -22,16 +22,16 @@ type TodoList struct {
 func (task *TodoTask) SetTask(t *Task) { task.Task = t }
 
 // IsCore returns whether or not a task is a "core" task.
-func (task *TodoTask) IsCore() bool { return task.isCore }
+func (task *TodoTask) GetIsCore() bool { return task.IsCore }
 
 // SetCore sets whether or not a task is a "core" task.
-func (task *TodoTask) SetCore(b bool) { task.isCore = b }
+func (task *TodoTask) SetCore(b bool) { task.IsCore = b }
 
-func (t *TodoList) Title() string { return t.title }
+func (t *TodoList) GetTitle() string { return t.Title }
 
-func (t *TodoList) SetTitle(s string) { t.title = s }
+func (t *TodoList) SetTitle(s string) { t.Title = s }
 
-func (t *TodoList) Tasks() []TodoTask { return t.tasks }
+func (t *TodoList) GetTasks() []TodoTask { return t.Tasks }
 
 // Buffer returns the buffered task.
 func (t *TodoList) Buffer() *TodoTask { return t.buffer }
@@ -46,7 +46,7 @@ func (t *TodoList) UpdatePriorities(start int) error {
 
 	var wg sync.WaitGroup
 
-	for i := start; i < len(t.tasks); i++ {
+	for i := start; i < len(t.Tasks); i++ {
 		// Increment the WaitGroup counter
 		wg.Add(1)
 
@@ -55,7 +55,7 @@ func (t *TodoList) UpdatePriorities(start int) error {
 			defer wg.Done()
 
 			// Update the task's priority
-			t.tasks[i].SetPriority(i)
+			t.Tasks[i].SetPriority(i)
 		}(i)
 	}
 
@@ -67,13 +67,13 @@ func (t *TodoList) UpdatePriorities(start int) error {
 func (t *TodoList) Add(task *TodoTask, index int) error {
 	// If index is out of range, then append task to the slice.
 	if err := t.Bounds(index); err != nil {
-		t.tasks = append(t.tasks, *task)
+		t.Tasks = append(t.Tasks, *task)
 		return nil
 	}
 
 	// Otherwise, insert task at the specified index.
-	t.tasks = append(t.tasks[:index+1], t.tasks[index:]...)
-	t.tasks[index] = *task
+	t.Tasks = append(t.Tasks[:index+1], t.Tasks[index:]...)
+	t.Tasks[index] = *task
 
 	return nil
 }
@@ -85,16 +85,16 @@ func (t *TodoList) Remove(index int) (*TodoTask, error) {
 	}
 
 	// Copy task before removing.
-	cpy := t.tasks[index]
+	cpy := t.Tasks[index]
 
 	// Remove task from slice.
-	t.tasks = append(t.tasks[:index], t.tasks[index+1:]...)
+	t.Tasks = append(t.Tasks[:index], t.Tasks[index+1:]...)
 
 	return &cpy, nil
 }
 
 func (t *TodoList) Bounds(index int) error {
-	if index < 0 || index >= len(t.tasks) {
+	if index < 0 || index >= len(t.Tasks) {
 		return fmt.Errorf("index %d out of range.", index)
 	}
 	return nil
