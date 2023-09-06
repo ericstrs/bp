@@ -124,14 +124,9 @@ func (tui *TUI) Populate() {
 // setupInputCapture sets up input capturing for the application.
 func (tui *TUI) setupInputCapture() func(event *tcell.EventKey) *tcell.EventKey {
 	return func(event *tcell.EventKey) *tcell.EventKey {
-		tasks := tui.taskData.Tasks()
-		if len(tasks) == 0 {
-			return event
-		}
-		task := tasks[tui.list.GetCurrentItem()]
 
 		// Global input handling
-		if event = tui.globalInputCapture(event, &task); event == nil {
+		if event = tui.globalInputCapture(event); event == nil {
 			// Override the entered input by absorbing the event, stop it from
 			// propogating further.
 			return nil
@@ -140,7 +135,7 @@ func (tui *TUI) setupInputCapture() func(event *tcell.EventKey) *tcell.EventKey 
 		// Context-specific input handling
 		switch tui.app.GetFocus() {
 		case tui.list:
-			tui.listInputCapture(event, &task)
+			tui.listInputCapture(event)
 			// TODO: case tui.boards:
 			// TODO: case tui.tree:
 		}
@@ -151,7 +146,7 @@ func (tui *TUI) setupInputCapture() func(event *tcell.EventKey) *tcell.EventKey 
 
 // globalInputCapture captures input interactions across all displayed
 // tview primatives.
-func (tui *TUI) globalInputCapture(event *tcell.EventKey, task *tasks.TodoTask) *tcell.EventKey {
+func (tui *TUI) globalInputCapture(event *tcell.EventKey) *tcell.EventKey {
 	// If tview primatives for user input are currently focused, ignore
 	// any global input captures. This prevents applicaton side effects.
 	// For example, this allows the user to type "q" in an input field
@@ -198,8 +193,8 @@ func (tui *TUI) globalInputCapture(event *tcell.EventKey, task *tasks.TodoTask) 
 }
 
 // listInputCapture captures input interactions specific to the list.
-func (t *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
-	t.listBoardInputCapture(event, *task)
+func (t *TUI) listInputCapture(event *tcell.EventKey) {
+	t.listBoardInputCapture(event)
 
 	switch event.Key() {
 	case tcell.KeyRune:
@@ -212,6 +207,8 @@ func (t *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
 			form := t.editListForm(t.list.GetCurrentItem())
 			t.showModal(form)
 		case 'x': // Toggle task completion status
+			tasks := t.taskData.Tasks()
+			task := tasks[t.list.GetCurrentItem()]
 			task.SetDone(!task.IsDone())
 			task.SetFinished(time.Now()) // set done date to current date
 			t.filterAndUpdateList()
@@ -251,7 +248,7 @@ func (t *TUI) listInputCapture(event *tcell.EventKey, task *tasks.TodoTask) {
 
 // listBoardInputCapture captures shared input interactions between
 // the list and kanban boards.
-func (t *TUI) listBoardInputCapture(event *tcell.EventKey, task tasks.Taskable) {
+func (t *TUI) listBoardInputCapture(event *tcell.EventKey) {
 	switch event.Key() {
 	case tcell.KeyRune:
 		switch event.Rune() {
