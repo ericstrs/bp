@@ -92,6 +92,11 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 // list is implemented.
 func (tui *TUI) filterAndUpdateList() {
 	tui.list.Clear()
+
+	if len(tui.taskData.Tasks()) == 0 {
+		tui.list.AddItem("No tasks available", "", 0, nil)
+	}
+
 	// TODO: should probably firt sort the list by priority
 	for _, task := range tui.taskData.Tasks() {
 		prefix := "[ []"
@@ -120,6 +125,9 @@ func (tui *TUI) Populate() {
 func (tui *TUI) setupInputCapture() func(event *tcell.EventKey) *tcell.EventKey {
 	return func(event *tcell.EventKey) *tcell.EventKey {
 		tasks := tui.taskData.Tasks()
+		if len(tasks) == 0 {
+			return event
+		}
 		task := tasks[tui.list.GetCurrentItem()]
 
 		// Global input handling
