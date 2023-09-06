@@ -7,3 +7,12 @@
 // implementations should follow. This allows core application to be
 // withstand changing storage implementations.
 package storage
+
+// Storable is an interface for any data type that can be stored.
+type Storable interface{}
+
+// Storage is an interface for any storage mechanism (YAML, Database, etc.)
+type Storage interface {
+	Save(name string, data Storable) error
+	Load(name string, into Storable) error
+}
