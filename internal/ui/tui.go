@@ -238,20 +238,6 @@ func (tui *TUI) globalInputCapture(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Key() {
 	case tcell.KeyRune:
 		switch event.Rune() {
-		/*
-			case 'j':
-				// Account for wrap around when moving down. For some reason, upward
-				// movement using k is already accounted for.
-				total := tui.list.GetItemCount()
-				idx := tui.list.GetCurrentItem() + 1
-				if idx >= total {
-					idx = 0
-				}
-				tui.list.SetCurrentItem(idx)
-			case 'k': // Upward movement
-				currentIdx := tui.list.GetCurrentItem()
-				tui.list.SetCurrentItem(currentIdx - 1)
-		*/
 		case 'q': // Quit the program
 			tui.app.Stop()
 		}
@@ -391,6 +377,7 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 		task.SetDescription(description)
 		task.SetCore(isCore)
 		task.SetPriority(currentIdx + 1)
+		task.SetID(currentIdx + 1)
 		t.taskData.Add(task, currentIdx+1)
 		t.taskData.UpdatePriorities(currentIdx + 1)
 
