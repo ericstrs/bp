@@ -18,6 +18,8 @@ type TodoList struct {
 	buffer *TodoTask
 }
 
+//var _ TaskList = &TodoList{}
+
 // SetTask sets the general task.
 func (task *TodoTask) SetTask(t *Task) { task.Task = t }
 
@@ -31,7 +33,16 @@ func (t *TodoList) GetTitle() string { return t.Title }
 
 func (t *TodoList) SetTitle(s string) { t.Title = s }
 
-func (t *TodoList) GetTasks() []TodoTask { return t.Tasks }
+func (t *TodoList) GetTask(index int) *TodoTask { return &t.Tasks[index] }
+
+func (t *TodoList) GetTasks() []TodoTask { return t.Tasks } /*[]Taskable {
+	taskables := make([]Taskable, len(t.Tasks))
+	for i, task := range t.Tasks {
+		taskables[i] = Taskable(task)
+	}
+	return taskables
+}
+*/
 
 // Buffer returns the buffered task.
 func (t *TodoList) Buffer() *TodoTask { return t.buffer }
