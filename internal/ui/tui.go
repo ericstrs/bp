@@ -30,10 +30,9 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	tui.app = tview.NewApplication()
 	tui.taskData = tl
 
-	/*
-		// Create a new list for todo tasks
-		tui.list = tview.NewList().SetSelectable(true, false)
-	*/
+	width := 25
+	// Remove two from width to account for panel borders
+	tui.leftPanelWidth = width - 2
 
 	tui.list = tview.NewTable().
 		SetSelectable(true, false)
@@ -66,8 +65,6 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	line := tview.NewBox().
 		SetBackgroundColor(tcell.ColorWhite)
 
-	width := 25
-
 	// Create the main parent grid
 	tui.mainGrid = tview.NewGrid().
 		SetRows(0).
@@ -75,9 +72,6 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 		AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
 		AddItem(line, 0, 1, 1, 1, 0, 0, false).
 		AddItem(tui.rightPanel, 0, 2, 1, 1, 0, 0, false)
-
-		// Remove two from width to account for panel borders
-	tui.leftPanelWidth = width - 2
 
 	// Initialize panel focus to left panel
 	tui.focusedPanel = tui.leftPanel
@@ -103,8 +97,10 @@ func (t *TUI) calcTaskIdx(selectedRow, columnWidth int) int {
 
 	// Iterate through each row up to the selected row
 	for i := 0; i < selectedRow; i++ {
+		task := t.taskData.GetTask(taskIdx)
+
 		// If the task description is being shown, skip the next row
-		if t.taskData.GetTask(taskIdx).GetShowDesc() {
+		if task.GetShowDesc() {
 			wrappedDesc := WordWrap(t.taskData.GetTask(taskIdx).GetDescription(), columnWidth)
 			i += len(wrappedDesc) // Skip the row(s) meant for task description
 		}
@@ -127,20 +123,14 @@ func (t *TUI) filterAndUpdateList(columnWidth int) {
 		t.list.SetCellSimple(0, 0, "No tasks available")
 	}
 
-	currentRow := 0
-
 	// TODO: should probably firt sort the list by priority
+
+	currentRow := 0
 	for _, task := range t.taskData.GetTasks() {
 		prefix := "[ []"
-		createdToday := task.GetStarted().Format("2006-01-02") == time.Now().Format("2006-01-02")
-		// If task is completed and not created today, then don't add it to
-		// the tview list.
-		if task.GetIsDone() && !createdToday {
-			continue
-		}
 
-		// If task if completed and created today, then mark it complete.
-		if task.GetIsDone() && createdToday {
+		// If task if completed, then mark it complete.
+		if task.GetIsDone() {
 			prefix = "[x[]"
 		}
 
@@ -202,6 +192,10 @@ func WordWrap(text string, lineWidth int) []string {
 	return wrappedLines
 }
 
+// Populate takes the the tasks from the task list and populates the
+// list that will be displayed to the user.
+// This function assumes that the left panel width field has been set
+// for the tui struct.
 func (t *TUI) Populate() {
 	t.filterAndUpdateList(t.leftPanelWidth)
 }
