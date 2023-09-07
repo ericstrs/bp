@@ -46,6 +46,10 @@ type Taskable interface {
 	GetDescription() string
 	// SetDescription sets the description of the task.
 	SetDescription(d string)
+	// GetShowDesc returns the show description status for the task.
+	GetShowDesc() bool
+	// SetShowDesc sets the show description status for the task.
+	SetShowDesc(b bool)
 	// DoneDate returns the date when the task was last finished.
 	GetFinished() time.Time
 	// SetFinished sets the date when the task was last finished.
@@ -70,6 +74,8 @@ type TaskList interface {
 	GetTitle() string
 	// SetTitle sets the title of the task list.
 	SetTitle(s string)
+	// GetTask return the task at the given index.
+	GetTask(index int) Taskable
 	// Tasks returns the list of tasks.
 	GetTasks() []Taskable
 	// Bounds check if an index is within range.
@@ -132,6 +138,10 @@ func (t *Task) SetName(s string) { t.Name = s }
 func (t Task) GetDescription() string { return t.Description }
 
 func (t *Task) SetDescription(d string) { t.Description = d }
+
+func (t *Task) GetShowDesc() bool { return t.ShowDesc }
+
+func (t *Task) SetShowDesc(b bool) { t.ShowDesc = b }
 
 func (t Task) GetFinished() time.Time { return t.Finished }
 
