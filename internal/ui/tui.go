@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"fmt"
+	"strings"
 	"time"
 
 	"github.com/gdamore/tcell/v2"
@@ -14,12 +14,13 @@ type TUI struct {
 	pages    *tview.Pages
 	mainGrid *tview.Grid
 
-	leftPanel  *tview.Grid
-	rightPanel *tview.Grid
+	leftPanel      *tview.Grid
+	leftPanelWidth int
+	rightPanel     *tview.Grid
 
 	focusedPanel *tview.Grid
 
-	list     *tview.List
+	list     *tview.Table
 	showDesc bool
 	taskData *tasks.TodoList `yaml:"todo_list"`
 }
@@ -29,8 +30,13 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	tui.app = tview.NewApplication()
 	tui.taskData = tl
 
-	// Create a new list for todo tasks
-	tui.list = tview.NewList().ShowSecondaryText(false)
+	/*
+		// Create a new list for todo tasks
+		tui.list = tview.NewList().SetSelectable(true, false)
+	*/
+
+	tui.list = tview.NewTable().
+		SetSelectable(true, false)
 
 	// Populate tui list with initial tasks
 	tui.Populate()
@@ -60,10 +66,12 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	line := tview.NewBox().
 		SetBackgroundColor(tcell.ColorWhite)
 
+	tui.leftPanelWidth = 25
+
 	// Create the main parent grid
 	tui.mainGrid = tview.NewGrid().
 		SetRows(0).
-		SetColumns(25, 1, 0).
+		SetColumns(tui.leftPanelWidth, 1, 0).
 		AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
 		AddItem(line, 0, 1, 1, 1, 0, 0, false).
 		AddItem(tui.rightPanel, 0, 2, 1, 1, 0, 0, false)
@@ -83,6 +91,25 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	}
 }
 
+// calcTaskIdx returns the calculated task index in a given task slice.
+// This function takes into account whether the description for each
+// task is shown, which would occupy an extra row in the task list
+// table.
+func (t *TUI) calcTaskIdx(selectedRow, columnWidth int) int {
+	taskIdx := 0
+
+	// Iterate through each row up to the selected row
+	for i := 0; i < selectedRow; i++ {
+		// If the task description is being shown, skip the next row
+		if t.taskData.GetTask(taskIdx).GetShowDesc() {
+			wrappedDesc := WordWrap(t.taskData.GetTask(taskIdx).GetDescription(), columnWidth)
+			i += len(wrappedDesc) // Skip the row(s) meant for task description
+		}
+		taskIdx++
+	}
+	return taskIdx
+}
+
 // filterAndUpdateList filters out past completed tasks, marks todays
 // completed tasks, and updates the tview todo list.
 //
@@ -90,15 +117,17 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 // always return to the first item in the list. This would be desired
 // when the functionality for moving completed tasks to the end of the
 // list is implemented.
-func (tui *TUI) filterAndUpdateList() {
-	tui.list.Clear()
+func (t *TUI) filterAndUpdateList(columnWidth int) {
+	t.list.Clear()
 
-	if len(tui.taskData.GetTasks()) == 0 {
-		tui.list.AddItem("No tasks available", "", 0, nil)
+	if len(t.taskData.GetTasks()) == 0 {
+		t.list.SetCellSimple(0, 0, "No tasks available")
 	}
 
+	currentRow := 0
+
 	// TODO: should probably firt sort the list by priority
-	for _, task := range tui.taskData.GetTasks() {
+	for _, task := range t.taskData.GetTasks() {
 		prefix := "[ []"
 		createdToday := task.GetStarted().Format("2006-01-02") == time.Now().Format("2006-01-02")
 		// If task is completed and not created today, then don't add it to
@@ -112,13 +141,66 @@ func (tui *TUI) filterAndUpdateList() {
 			prefix = "[x[]"
 		}
 
-		// Add a task to the list
-		tui.list.AddItem(fmt.Sprintf("%s %s", prefix, task.GetName()), task.GetDescription(), 0, nil)
+		// Add task name to the list
+		t.list.SetCellSimple(currentRow, 0, prefix+task.GetName())
+
+		// If task show description status is set to true, add the task
+		// description to the list.
+		if task.GetShowDesc() {
+			wrappedDesc := WordWrap(task.Description, columnWidth)
+			for _, line := range wrappedDesc {
+				currentRow++
+				t.list.SetCell(currentRow, 0, tview.NewTableCell(line).
+					SetAlign(tview.AlignLeft).
+					SetSelectable(false).
+					SetTextColor(tcell.ColorYellow))
+			}
+		}
+		currentRow++
 	}
 }
 
-func (tui *TUI) Populate() {
-	tui.filterAndUpdateList()
+// WordWrap returns a slice of wrapped lines given the text to the specified
+// length, breaking at word boundaries.
+func WordWrap(text string, lineWidth int) []string {
+	// Break text into individual words, split by spaces.
+	words := strings.Fields(text)
+
+	// wrappedLines will hold the lines of text after they've been wrapped.
+	wrappedLines := []string{}
+
+	// currentLine holds the words for the line being constructed.
+	currentLine := ""
+
+	// Loop through each word in the words slice.
+	for _, word := range words {
+		// If adding the new word to the current line would make it too long,
+		// append currentLine to wrappedLines and start a new line.
+		if len(currentLine)+len(word)+1 > lineWidth {
+			wrappedLines = append(wrappedLines, currentLine)
+			currentLine = ""
+		}
+
+		// If the current line isn't empty, add a space before the new word.
+		if len(currentLine) > 0 {
+			currentLine += " "
+		}
+
+		// Append the new word to the current line.
+		currentLine += word
+	}
+
+	// Append any remaining text in currentLine to wrappedLines.
+	if len(currentLine) > 0 {
+		wrappedLines = append(wrappedLines, currentLine)
+	}
+
+	// Return the slice of wrapped lines.
+	return wrappedLines
+}
+
+func (t *TUI) Populate() {
+	t.filterAndUpdateList(t.leftPanelWidth)
 }
 
 // setupInputCapture sets up input capturing for the application.
@@ -159,18 +241,20 @@ func (tui *TUI) globalInputCapture(event *tcell.EventKey) *tcell.EventKey {
 	switch event.Key() {
 	case tcell.KeyRune:
 		switch event.Rune() {
-		case 'j':
-			// Account for wrap around when moving down. For some reason, upward
-			// movement using k is already accounted for.
-			total := tui.list.GetItemCount()
-			idx := tui.list.GetCurrentItem() + 1
-			if idx >= total {
-				idx = 0
-			}
-			tui.list.SetCurrentItem(idx)
-		case 'k': // Upward movement
-			currentIdx := tui.list.GetCurrentItem()
-			tui.list.SetCurrentItem(currentIdx - 1)
+		/*
+			case 'j':
+				// Account for wrap around when moving down. For some reason, upward
+				// movement using k is already accounted for.
+				total := tui.list.GetItemCount()
+				idx := tui.list.GetCurrentItem() + 1
+				if idx >= total {
+					idx = 0
+				}
+				tui.list.SetCurrentItem(idx)
+			case 'k': // Upward movement
+				currentIdx := tui.list.GetCurrentItem()
+				tui.list.SetCurrentItem(currentIdx - 1)
+		*/
 		case 'q': // Quit the program
 			tui.app.Stop()
 		}
@@ -196,25 +280,26 @@ func (tui *TUI) globalInputCapture(event *tcell.EventKey) *tcell.EventKey {
 func (t *TUI) listInputCapture(event *tcell.EventKey) {
 	t.listBoardInputCapture(event)
 
+	row, _ := t.list.GetSelection()
 	switch event.Key() {
 	case tcell.KeyRune:
 		switch event.Rune() {
 		case 'a': // Create new task
-			form := t.createListForm(t.list.GetCurrentItem())
+			form := t.createListForm(t.calcTaskIdx(row, t.leftPanelWidth))
 			t.showModal(form)
 			return
 		case 'e': // Edit task
-			form := t.editListForm(t.list.GetCurrentItem())
+			form := t.editListForm(t.calcTaskIdx(row, t.leftPanelWidth))
 			t.showModal(form)
 		case 'x': // Toggle task completion status
-			tasks := t.taskData.GetTasks()
-			task := tasks[t.list.GetCurrentItem()]
+			task := t.taskData.GetTask(t.calcTaskIdx(row, t.leftPanelWidth))
 			task.SetDone(!task.GetIsDone())
-			task.SetFinished(time.Now()) // set done date to current date
-			t.filterAndUpdateList()
+			// TODO: handle toggle start/finish date fields
+			//task.SetFinished(time.Now()) // set done date to current date
+			t.filterAndUpdateList(t.leftPanelWidth)
 		case 'd': // Delete task
 			// Delete task from task data slice
-			task, err := t.taskData.Remove(t.list.GetCurrentItem())
+			task, err := t.taskData.Remove(t.calcTaskIdx(row, t.leftPanelWidth))
 			if err != nil {
 				return
 			}
@@ -222,12 +307,12 @@ func (t *TUI) listInputCapture(event *tcell.EventKey) {
 			t.taskData.SetBuffer(task)
 
 			// Update task priorities
-			t.taskData.UpdatePriorities(t.list.GetCurrentItem())
+			t.taskData.UpdatePriorities(t.calcTaskIdx(row, t.leftPanelWidth))
 
 			// Update tview todo list
-			t.filterAndUpdateList()
+			t.filterAndUpdateList(t.leftPanelWidth)
 		case 'p': // Paste task
-			currentIdx := t.list.GetCurrentItem()
+			currentIdx := t.calcTaskIdx(row, t.leftPanelWidth)
 			// Read from buffer
 			task := t.taskData.Buffer()
 
@@ -238,10 +323,18 @@ func (t *TUI) listInputCapture(event *tcell.EventKey) {
 			t.taskData.UpdatePriorities(currentIdx + 1)
 
 			// Update tview todo list
-			t.filterAndUpdateList()
-		case ' ': // Toggle all task descriptions
-			t.showDesc = !t.showDesc
-			t.list.ShowSecondaryText(t.showDesc)
+			t.filterAndUpdateList(t.leftPanelWidth)
+		case ' ': // Toggle task description
+			selectedRow, _ := t.list.GetSelection()
+			currentIdx := t.calcTaskIdx(selectedRow, t.leftPanelWidth)
+			// If calculated task index is within bounds, toggle task show
+			// description status, and update rendered list.
+			if err := t.taskData.Bounds(currentIdx); err != nil {
+				return
+			}
+			task := t.taskData.GetTask(currentIdx)
+			task.ShowDesc = !task.ShowDesc
+			t.filterAndUpdateList(t.leftPanelWidth)
 		}
 	}
 }
@@ -305,7 +398,7 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 		t.taskData.UpdatePriorities(currentIdx + 1)
 
 		// Update tview list
-		t.filterAndUpdateList()
+		t.filterAndUpdateList(t.leftPanelWidth)
 
 		t.closeModal()
 	})
@@ -321,15 +414,18 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 // editListForm creates and returns a tview form for creating a new
 // todo list task.
 func (t *TUI) editListForm(currentIdx int) *tview.Form {
-	var name, description string
-	var isCore bool
 	tasks := t.taskData.GetTasks()
 	task := &tasks[currentIdx]
+	name := task.GetName()
+	description := task.GetDescription()
+	isCore := task.GetIsCore()
 
 	form := tview.NewForm()
 	form.SetBorder(true)
 	form.SetTitle("Edit Task")
 
+	// Define the input fields for the forms and update field variables if
+	// user makes any changes to the default values.
 	form.AddInputField("Name", task.GetName(), 20, nil, func(text string) {
 		name = text
 	})
@@ -349,7 +445,7 @@ func (t *TUI) editListForm(currentIdx int) *tview.Form {
 		task.SetCore(isCore)
 
 		// Update tview list
-		t.filterAndUpdateList()
+		t.filterAndUpdateList(t.leftPanelWidth)
 	})
 
 	form.AddButton("Cancel", func() {
