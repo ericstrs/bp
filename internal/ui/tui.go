@@ -66,15 +66,18 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	line := tview.NewBox().
 		SetBackgroundColor(tcell.ColorWhite)
 
-	tui.leftPanelWidth = 25
+	width := 25
 
 	// Create the main parent grid
 	tui.mainGrid = tview.NewGrid().
 		SetRows(0).
-		SetColumns(tui.leftPanelWidth, 1, 0).
+		SetColumns(width, 1, 0).
 		AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
 		AddItem(line, 0, 1, 1, 1, 0, 0, false).
 		AddItem(tui.rightPanel, 0, 2, 1, 1, 0, 0, false)
+
+		// Remove two from width to account for panel borders
+	tui.leftPanelWidth = width - 2
 
 	// Initialize panel focus to left panel
 	tui.focusedPanel = tui.leftPanel
