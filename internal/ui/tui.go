@@ -275,8 +275,25 @@ func (t *TUI) listInputCapture(event *tcell.EventKey) {
 			form := t.editListForm(t.calcTaskIdx(row, t.leftPanelWidth))
 			t.showModal(form)
 		case 'x': // Toggle task completion status
-			task := t.taskData.GetTask(t.calcTaskIdx(row, t.leftPanelWidth))
+			currentIdx := t.calcTaskIdx(row, t.leftPanelWidth)
+			task := *t.taskData.GetTask(currentIdx)
+
 			task.SetDone(!task.GetIsDone())
+
+			// If the task was toggled to be done,
+			if task.GetIsDone() {
+				// Remove task from the task data slice
+				_, err := t.taskData.Remove(currentIdx)
+				if err != nil {
+					return
+				}
+
+				// Append the task to the end of the slice
+				t.taskData.Add(&task, len(t.taskData.GetTasks()))
+				// Update task priorities
+				t.taskData.UpdatePriorities(currentIdx)
+			}
+
 			// TODO: handle toggle start/finish date fields
 			//task.SetFinished(time.Now()) // set done date to current date
 			t.filterAndUpdateList(t.leftPanelWidth)
