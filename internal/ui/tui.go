@@ -68,7 +68,7 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	// Create the main parent grid
 	tui.mainGrid = tview.NewGrid().
 		SetRows(0).
-		SetColumns(width, 1, 0).
+		SetColumns(-1, 1, -4).
 		AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
 		AddItem(line, 0, 1, 1, 1, 0, 0, false).
 		AddItem(tui.rightPanel, 0, 2, 1, 1, 0, 0, false)
@@ -82,6 +82,15 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 
 	// Set input handling
 	tui.app.SetInputCapture(tui.setupInputCapture())
+
+	// Update left and right panel size before drawing. This won't affect
+	// the current drawing, it sets the panel width variables for the next
+	// draw operation.
+	tui.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		width, _ := screen.Size()
+		tui.leftPanelWidth = int(float64(width)*0.2) - 2
+		return false
+	})
 
 	if err := tui.app.SetRoot(tui.pages, true).Run(); err != nil {
 		panic(err)
