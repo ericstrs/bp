@@ -21,14 +21,16 @@ type TUI struct {
 	focusedPanel *tview.Grid
 
 	list     *tview.Table
-	showDesc bool
-	taskData *tasks.TodoList `yaml:"todo_list"`
+	taskData *tasks.TodoList
+	tree     *tview.TreeView
+	treeData []tasks.Board
 }
 
 // Init intializes the tview app and sets up the UI.
-func (tui *TUI) Init(tl *tasks.TodoList) {
+func (tui *TUI) Init(tl *tasks.TodoList, b []tasks.Board) {
 	tui.app = tview.NewApplication()
 	tui.taskData = tl
+	tui.treeData = b
 
 	width := 25
 	// Remove two from width to account for panel borders
@@ -36,6 +38,16 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 
 	tui.list = tview.NewTable().
 		SetSelectable(true, false)
+
+	root := tview.NewTreeNode("Board Trees")
+
+	tui.tree = tview.NewTreeView().
+		SetRoot(root).
+		SetCurrentNode(root)
+
+	tui.tree.SetSelectedFunc(func(node *tview.TreeNode) {
+		// TODO: (?)
+	})
 
 	// Populate tui list with initial tasks
 	tui.Populate()
@@ -48,17 +60,12 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 	tui.leftPanel.SetTitle(tui.taskData.GetTitle())
 	tui.leftPanel.SetBorder(true)
 
-	// Initialize the right panel with a simple text view
-	rightTextView := tview.NewTextView().
-		SetDynamicColors(true).
-		SetText("This is the right panel")
-
 	// Create right-hand side panel
 	tui.rightPanel = tview.NewGrid().
 		SetRows(0).
 		SetColumns(0).
-		AddItem(rightTextView, 0, 0, 1, 1, 0, 0, false)
-	tui.rightPanel.SetTitle("Right Panel")
+		AddItem(tui.tree, 0, 0, 1, 1, 0, 0, true)
+	//tui.rightPanel.SetTitle("Right Panel")
 	tui.rightPanel.SetBorder(false)
 
 	// Create line to separate the todo list and the kanban boards
@@ -71,7 +78,7 @@ func (tui *TUI) Init(tl *tasks.TodoList) {
 		SetColumns(-1, 1, -4).
 		AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
 		AddItem(line, 0, 1, 1, 1, 0, 0, false).
-		AddItem(tui.rightPanel, 0, 2, 1, 1, 0, 0, false)
+		AddItem(tui.rightPanel, 0, 2, 1, 1, 0, 0, true)
 
 	// Initialize panel focus to left panel
 	tui.focusedPanel = tui.leftPanel
@@ -207,6 +214,16 @@ func WordWrap(text string, lineWidth int) []string {
 // for the tui struct.
 func (t *TUI) Populate() {
 	t.filterAndUpdateList(t.leftPanelWidth)
+	t.updateTree()
+}
+
+func (t *TUI) updateTree() {
+	for _, board := range t.treeData {
+		boardNode := tview.NewTreeNode(board.GetTitle()).
+			SetReference(board).
+			SetSelectable(true)
+		t.tree.GetRoot().AddChild(boardNode)
+	}
 }
 
 // setupInputCapture sets up input capturing for the application.
