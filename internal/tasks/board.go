@@ -7,31 +7,39 @@ import (
 )
 
 type BoardTree struct {
-	Root    *Board
-	Current *Board
+	Root    *Board `yaml:"root"`
+	Current *Board `yaml:"current"`
 }
 
 type Board struct {
-	ID          int
-	Title       string
-	ParentBoard *Board
-	ParentTask  *BoardTask
-	Children    []*Board
-	Columns     []BoardColumn
-	Buffer      *BoardTask
+	ID          int           `yaml:"id"`
+	Title       string        `yaml:"title"`
+	ParentBoard *Board        `yaml:"parent_board"`
+	ParentTask  *BoardTask    `yaml:"parent_task"`
+	Children    []*Board      `yaml:"children"`
+	Columns     []BoardColumn `yaml:"columns"`
+	Buffer      *BoardTask    `yaml:"buffer"`
 }
 
 type BoardColumn struct {
-	Title string
-	Tasks []BoardTask
+	Title string      `yaml:"title"`
+	Tasks []BoardTask `yaml:"tasks"`
 }
 
 type BoardTask struct {
 	*Task
-	Child *Board
+	Child *Board `yaml:"child"`
 }
 
 var _ Taskable = &BoardTask{}
+
+func (tree BoardTree) GetRoot() *Board { return tree.Root }
+
+func (tree *BoardTree) SetRoot(b *Board) { tree.Root = b }
+
+func (tree BoardTree) GetCurrent() *Board { return tree.Current }
+
+func (tree *BoardTree) SetCurrent(b *Board) { tree.Current = b }
 
 func (b Board) GetTitle() string { return b.Title }
 
