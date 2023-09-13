@@ -214,15 +214,42 @@ func WordWrap(text string, lineWidth int) []string {
 // for the tui struct.
 func (t *TUI) Populate() {
 	t.filterAndUpdateList(t.leftPanelWidth)
-	t.updateTree()
-}
 
-func (t *TUI) updateTree() {
 	for _, board := range t.treeData {
 		boardNode := tview.NewTreeNode(board.GetTitle()).
 			SetReference(board).
 			SetSelectable(true)
 		t.tree.GetRoot().AddChild(boardNode)
+
+		updateTree(boardNode, board)
+	}
+}
+
+func updateTree(node *tview.TreeNode, board tasks.Board) {
+	for _, column := range board.GetColumns() {
+		columnNode := tview.NewTreeNode(column.GetTitle()).
+			SetReference(column).
+			SetSelectable(true)
+		node.AddChild(columnNode)
+
+		for _, task := range column.GetTasks() {
+			taskNode := tview.NewTreeNode(task.GetName()).
+				SetReference(task).
+				SetSelectable(true)
+			columnNode.AddChild(taskNode)
+
+			if task.GetHasChild() {
+				childBoard := task.GetChild()
+				/*
+					childNode := tview.NewTreeNode(childBoard.GetTitle()).
+						SetReference(childBoard).
+						SetSelectable(true)
+					taskNode.AddChild(childNode)
+				*/
+
+				updateTree(taskNode, *childBoard)
+			}
+		}
 	}
 }
 
