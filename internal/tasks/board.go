@@ -28,7 +28,8 @@ type BoardColumn struct {
 
 type BoardTask struct {
 	*Task
-	Child *Board `yaml:"child"`
+	Child    *Board `yaml:"child"`
+	HasChild bool   `yaml:"has_child"`
 }
 
 var _ Taskable = &BoardTask{}
@@ -174,3 +175,7 @@ func (bt *BoardTask) SetTask(t *Task) { bt.Task = t }
 func (bt BoardTask) GetChild() *Board { return bt.Child }
 
 func (bt *BoardTask) SetChild(c *Board) { bt.Child = c }
+
+func (bt BoardTask) GetHasChild() bool { return bt.HasChild }
+
+func (bt *BoardTask) SetHasChild(b bool) { bt.HasChild = b }
