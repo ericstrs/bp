@@ -17,91 +17,181 @@ type TUI struct {
 	leftPanel      *tview.Grid
 	leftPanelWidth int
 	rightPanel     *tview.Grid
-
-	focusedPanel *tview.Grid
+	focusedPanel   *tview.Grid
 
 	list     *tview.Table
 	taskData *tasks.TodoList
-	tree     *tview.TreeView
-	treeData []tasks.Board
+
+	tree                      *tview.TreeView
+	treeData                  []tasks.Board
+	board                     *tview.Grid
+	boardColumns              []*tview.Table
+	focusedColumn             int
+	isNoColumnsTableDisplayed bool
 }
 
 // Init intializes the tview app and sets up the UI.
-func (tui *TUI) Init(tl *tasks.TodoList, b []tasks.Board) {
-	tui.app = tview.NewApplication()
-	tui.taskData = tl
-	tui.treeData = b
+func (t *TUI) Init(tl *tasks.TodoList, b []tasks.Board) {
+	t.app = tview.NewApplication()
+	t.taskData = tl
+	t.treeData = b
 
 	width := 25
 	// Remove two from width to account for panel borders
-	tui.leftPanelWidth = width - 2
+	t.leftPanelWidth = width - 2
 
-	tui.list = tview.NewTable().
+	t.list = tview.NewTable().
 		SetSelectable(true, false)
+
+	t.board = tview.NewGrid().
+		SetRows(0).
+		SetColumns(0)
+
+	t.boardInputCapture()
 
 	root := tview.NewTreeNode("Board Trees")
 
-	tui.tree = tview.NewTreeView().
+	t.tree = tview.NewTreeView().
 		SetRoot(root).
 		SetCurrentNode(root)
 
-	tui.tree.SetSelectedFunc(func(node *tview.TreeNode) {
-		// TODO: (?)
+	t.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		if event.Rune() == 'l' {
+			node := t.tree.GetCurrentNode()
+			ref := node.GetReference()
+			board, ok := ref.(tasks.Board)
+
+			if !ok {
+				return event
+			}
+
+			t.showBoard(&board)
+		}
+		return event
 	})
 
+	/*
+		t.tree.SetSelectedFunc(func(node *tview.TreeNode) {
+			// TODO: (?)
+		})
+	*/
+
 	// Populate tui list with initial tasks
-	tui.Populate()
+	t.Populate()
 
 	// Create the left-hand side panel
-	tui.leftPanel = tview.NewGrid().
+	t.leftPanel = tview.NewGrid().
 		SetRows(0).
 		SetColumns(0).
-		AddItem(tui.list, 0, 0, 1, 1, 0, 0, true)
-	tui.leftPanel.SetTitle(tui.taskData.GetTitle())
-	tui.leftPanel.SetBorder(true)
+		AddItem(t.list, 0, 0, 1, 1, 0, 0, true)
+	t.leftPanel.SetTitle(t.taskData.GetTitle())
+	t.leftPanel.SetBorder(true)
 
 	// Create right-hand side panel
-	tui.rightPanel = tview.NewGrid().
+	t.rightPanel = tview.NewGrid().
 		SetRows(0).
-		SetColumns(0).
-		AddItem(tui.tree, 0, 0, 1, 1, 0, 0, true)
-	//tui.rightPanel.SetTitle("Right Panel")
-	tui.rightPanel.SetBorder(false)
+		SetColumns(0)
+		//AddItem(t.tree, 0, 0, 1, 1, 0, 0, true)
+	t.rightPanel.SetTitle("Tree Navigation")
+	t.rightPanel.SetBorder(false)
+	t.showTreeView()
 
 	// Create line to separate the todo list and the kanban boards
 	line := tview.NewBox().
 		SetBackgroundColor(tcell.ColorWhite)
 
 	// Create the main parent grid
-	tui.mainGrid = tview.NewGrid().
+	t.mainGrid = tview.NewGrid().
 		SetRows(0).
 		SetColumns(-1, 1, -4).
-		AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
+		AddItem(t.leftPanel, 0, 0, 1, 1, 0, 0, true).
 		AddItem(line, 0, 1, 1, 1, 0, 0, false).
-		AddItem(tui.rightPanel, 0, 2, 1, 1, 0, 0, true)
+		AddItem(t.rightPanel, 0, 2, 1, 1, 0, 0, true)
 
 	// Initialize panel focus to left panel
-	tui.focusedPanel = tui.leftPanel
+	t.focusedPanel = t.leftPanel
 
 	// Add the main grid to page
-	tui.pages = tview.NewPages().
-		AddPage("main", tui.mainGrid, true, true)
+	t.pages = tview.NewPages().
+		AddPage("main", t.mainGrid, true, true)
 
 	// Set input handling
-	tui.app.SetInputCapture(tui.setupInputCapture())
+	t.app.SetInputCapture(t.setupInputCapture())
 
 	// Update left and right panel size before drawing. This won't affect
 	// the current drawing, it sets the panel width variables for the next
 	// draw operation.
-	tui.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+	t.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
 		width, _ := screen.Size()
-		tui.leftPanelWidth = int(float64(width)*0.2) - 2
+		t.leftPanelWidth = int(float64(width)*0.2) - 2
 		return false
 	})
 
-	if err := tui.app.SetRoot(tui.pages, true).Run(); err != nil {
+	if err := t.app.SetRoot(t.pages, true).Run(); err != nil {
 		panic(err)
 	}
+}
+
+func (t *TUI) showBoard(b *tasks.Board) {
+	t.boardColumns = nil // Reset columns
+	if len(b.GetColumns()) == 0 {
+		t.rightPanel.Clear()
+		t.rightPanel.SetTitle("No Columns")
+		noColumnTable := tview.NewTable()
+		cell := tview.NewTableCell("This board has no columns.")
+
+		noColumnTable.SetCell(0, 0, cell)
+
+		t.board.AddItem(noColumnTable, 0, 0, 1, 1, 0, 0, false)
+		t.rightPanel.AddItem(t.board, 0, 0, 1, 1, 0, 0, true)
+		t.app.SetFocus(t.rightPanel)
+		t.isNoColumnsTableDisplayed = true
+		return
+	}
+	t.isNoColumnsTableDisplayed = false
+
+	t.rightPanel.SetTitle(b.GetTitle())
+
+	// Loop over all the columns in the board
+	for i, column := range b.GetColumns() {
+		// Need to create the kanban board column equivalent of a todo list
+		table := tview.NewTable().
+			SetSelectable(false, false) // No selection by default
+		table.SetBorder(true)
+		table.SetTitle(column.GetTitle())
+
+		for j, task := range column.GetTasks() {
+			table.SetCell(j, 0, tview.NewTableCell(task.Name))
+		}
+
+		t.board.AddItem(table, 0, i, 1, 1, 0, 0, false)
+
+		t.boardColumns = append(t.boardColumns, table)
+	}
+
+	//t.boardColumns[0].SetSelectable(true, false)
+	t.focusedColumn = 0
+
+	t.rightPanel.Clear()
+	// Set right panel content to the board grid. This will override the
+	// tree view being displayed.
+	t.rightPanel.AddItem(t.board, 0, 0, 1, 1, 0, 0, false)
+
+	// Assert focus on the right panel. This is needed for board input
+	// capture to work.
+	t.app.SetFocus(t.boardColumns[0])
+}
+
+func (t *TUI) showTreeView() {
+	t.rightPanel.SetTitle("Tree Navigation")
+	t.rightPanel.Clear()
+	// Set right panel content to the tree view. This will override a
+	// board being dislayed.
+	t.rightPanel.AddItem(t.tree, 0, 0, 1, 1, 0, 0, true)
+
+	// Assert focus on the right panel. This is needed for tree input
+	// capture to work.
+	t.app.SetFocus(t.rightPanel)
 }
 
 // calcTaskIdx returns the calculated task index in a given task slice.
@@ -400,6 +490,70 @@ func (t *TUI) listBoardInputCapture(event *tcell.EventKey) {
 		switch event.Rune() {
 		}
 	}
+}
+
+// boardInputCapture captures input interactions specific to the
+// currently displayed board.
+func (t *TUI) boardInputCapture() {
+	t.board.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// If there a no columns table is being displayed, allow user to go
+		// back to tree navigation with 'h'.
+		if t.isNoColumnsTableDisplayed {
+			switch event.Rune() {
+			case 'h':
+				t.showTreeView()
+			}
+			return event
+		}
+
+		isFocusedOnTable := false
+		if rows, cols := t.boardColumns[t.focusedColumn].GetSelectable(); rows == false && cols == false {
+			isFocusedOnTable = true
+		}
+		selectedRow, _ := t.boardColumns[t.focusedColumn].GetSelection()
+
+		switch event.Rune() {
+		case 'l': // move right
+			if t.focusedColumn < len(t.boardColumns)-1 {
+				t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+				t.focusedColumn++
+				t.boardColumns[t.focusedColumn].SetSelectable(true, false)
+
+				if isFocusedOnTable {
+					t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+				}
+				t.app.SetFocus(t.boardColumns[t.focusedColumn])
+			}
+		case 'h': // move left
+			// If at the first column, switch back to TreeView
+			if t.focusedColumn == 0 {
+				t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+				t.showTreeView()
+				return event
+			}
+
+			t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+			t.focusedColumn--
+			t.boardColumns[t.focusedColumn].SetSelectable(true, false)
+
+			if isFocusedOnTable {
+				t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+			}
+			t.app.SetFocus(t.boardColumns[t.focusedColumn])
+		case 'j': // move down
+			if isFocusedOnTable {
+				// Enable task selection
+				t.boardColumns[t.focusedColumn].SetSelectable(true, false)
+			}
+		case 'k': // move up
+			if !isFocusedOnTable && selectedRow == 0 {
+				// Disable task selection
+				t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+			}
+			//case 'a':
+		}
+		return event
+	})
 }
 
 // showModal sets up a modal grid for the given form and displays it.
