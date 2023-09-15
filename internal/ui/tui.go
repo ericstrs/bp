@@ -26,6 +26,7 @@ type TUI struct {
 	treeData                  []tasks.Board
 	board                     *tview.Grid
 	boardColumns              []*tview.Table
+	boardColumnsData          []tasks.BoardColumn
 	focusedColumn             int
 	isNoColumnsTableDisplayed bool
 }
@@ -133,8 +134,11 @@ func (t *TUI) Init(tl *tasks.TodoList, b []tasks.Board) {
 }
 
 func (t *TUI) showBoard(b *tasks.Board) {
+	t.rightPanel.Clear()
 	t.boardColumns = nil // Reset columns
-	if len(b.GetColumns()) == 0 {
+	t.boardColumnsData = b.GetColumns()
+
+	if len(t.boardColumnsData) == 0 {
 		t.rightPanel.Clear()
 		t.rightPanel.SetTitle("No Columns")
 		noColumnTable := tview.NewTable()
@@ -153,33 +157,56 @@ func (t *TUI) showBoard(b *tasks.Board) {
 	t.rightPanel.SetTitle(b.GetTitle())
 
 	// Loop over all the columns in the board
-	for i, column := range b.GetColumns() {
+	for i, column := range t.boardColumnsData {
 		// Need to create the kanban board column equivalent of a todo list
 		table := tview.NewTable().
 			SetSelectable(false, false) // No selection by default
 		table.SetBorder(true)
 		table.SetTitle(column.GetTitle())
 
-		for j, task := range column.GetTasks() {
-			table.SetCell(j, 0, tview.NewTableCell(task.Name))
-		}
-
-		t.board.AddItem(table, 0, i, 1, 1, 0, 0, false)
-
 		t.boardColumns = append(t.boardColumns, table)
+		t.updateColumn(i)
+		t.board.AddItem(table, 0, i, 1, 1, 0, 0, false)
 	}
 
-	//t.boardColumns[0].SetSelectable(true, false)
-	t.focusedColumn = 0
-
-	t.rightPanel.Clear()
 	// Set right panel content to the board grid. This will override the
 	// tree view being displayed.
 	t.rightPanel.AddItem(t.board, 0, 0, 1, 1, 0, 0, false)
 
+	t.focusedColumn = 0
+
 	// Assert focus on the right panel. This is needed for board input
 	// capture to work.
 	t.app.SetFocus(t.boardColumns[0])
+}
+
+func (t *TUI) updateColumn(colIdx int) {
+	t.boardColumns[colIdx].Clear()
+
+	if len(t.boardColumnsData[t.focusedColumn].GetTasks()) == 0 {
+		t.boardColumns[colIdx].SetCellSimple(0, 0, "No tasks available")
+		return
+	}
+
+	currentRow := 0
+	for _, task := range t.boardColumnsData[t.focusedColumn].GetTasks() {
+		t.boardColumns[colIdx].SetCellSimple(currentRow, 0, task.Name)
+
+		// If task show description status is set to true, add the task
+		// description to the list.
+		if task.GetShowDesc() {
+			// TODO: find righ panel width
+			wrappedDesc := WordWrap(task.Description, 50)
+			for _, line := range wrappedDesc {
+				currentRow++
+				t.boardColumns[colIdx].SetCell(currentRow, 0, tview.NewTableCell(line).
+					SetAlign(tview.AlignLeft).
+					SetSelectable(false).
+					SetTextColor(tcell.ColorYellow))
+			}
+		}
+		currentRow++
+	}
 }
 
 func (t *TUI) showTreeView() {
@@ -215,6 +242,26 @@ func (t *TUI) calcTaskIdx(selectedRow, columnWidth int) int {
 	return taskIdx
 }
 
+// calcTaskIdxBoard returns the calculated task index in a given board
+// column. This function takes into account whether the description for each
+// task is shown, which would occupy an extra row in the column table.
+func (t *TUI) calcTaskIdxBoard(selectedRow, columnWidth int) int {
+	taskIdx := 0
+
+	// Iterate through each row up to the selected row
+	for i := 0; i < selectedRow; i++ {
+		task := t.boardColumnsData[t.focusedColumn].GetTask(taskIdx)
+
+		// If the task description is being shown, skip the next row
+		if task.GetShowDesc() {
+			wrappedDesc := WordWrap(t.taskData.GetTask(taskIdx).GetDescription(), columnWidth)
+			i += len(wrappedDesc) // Skip the row(s) meant for task description
+		}
+		taskIdx++
+	}
+	return taskIdx
+}
+
 // filterAndUpdateList filters out past completed tasks, marks todays
 // completed tasks, and updates the tview todo list.
 //
@@ -227,6 +274,7 @@ func (t *TUI) filterAndUpdateList(columnWidth int) {
 
 	if len(t.taskData.GetTasks()) == 0 {
 		t.list.SetCellSimple(0, 0, "No tasks available")
+		return
 	}
 
 	// TODO: should probably firt sort the list by priority
@@ -550,7 +598,20 @@ func (t *TUI) boardInputCapture() {
 				// Disable task selection
 				t.boardColumns[t.focusedColumn].SetSelectable(false, false)
 			}
-			//case 'a':
+		//case 'a':
+		case ' ': // Toggle task description
+			if !isFocusedOnTable {
+				// TODO: replace 50 with right panel width
+				currentIdx := t.calcTaskIdxBoard(selectedRow, 50)
+				// If calculated task index is within bounds, toggle task show
+				// description status, and update rendered list.
+				if err := t.boardColumnsData[t.focusedColumn].Bounds(currentIdx); err != nil {
+					return event
+				}
+				task := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
+				task.ShowDesc = !task.ShowDesc
+				t.updateColumn(t.focusedColumn)
+			}
 		}
 		return event
 	})
