@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"errors"
+	"log"
 	"strings"
 	"time"
 
@@ -47,26 +49,23 @@ func (t *TUI) Init(tl *tasks.TodoList, b []tasks.Board) {
 	t.board = tview.NewGrid().
 		SetRows(0).
 		SetColumns(0)
-
 	t.boardInputCapture()
 
 	root := tview.NewTreeNode("Board Trees")
-
 	t.tree = tview.NewTreeView().
 		SetRoot(root).
 		SetCurrentNode(root)
-
 	t.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		if event.Rune() == 'l' {
 			node := t.tree.GetCurrentNode()
 			ref := node.GetReference()
-			board, ok := ref.(tasks.Board)
+			board, ok := ref.(*tasks.Board)
 
 			if !ok {
 				return event
 			}
 
-			t.showBoard(&board)
+			t.showBoard(board)
 		}
 		return event
 	})
@@ -140,7 +139,6 @@ func (t *TUI) showBoard(b *tasks.Board) {
 	t.boardColumnsData = b.GetColumns()
 
 	if len(t.boardColumnsData) == 0 {
-		t.rightPanel.Clear()
 		t.rightPanel.SetTitle("No Columns")
 		noColumnTable := tview.NewTable()
 		cell := tview.NewTableCell("This board has no columns.")
@@ -159,6 +157,7 @@ func (t *TUI) showBoard(b *tasks.Board) {
 
 	// Loop over all the columns in the board
 	for i, column := range t.boardColumnsData {
+		column := column
 		// Need to create the kanban board column equivalent of a todo list
 		table := tview.NewTable().
 			SetSelectable(false, false) // No selection by default
@@ -167,18 +166,17 @@ func (t *TUI) showBoard(b *tasks.Board) {
 
 		t.boardColumns = append(t.boardColumns, table)
 		t.updateColumn(i)
-		t.board.AddItem(table, 0, i, 1, 1, 0, 0, false)
+		t.board.AddItem(table, 0, i, 1, 1, 0, 0, true)
 	}
 
 	// Set right panel content to the board grid. This will override the
 	// tree view being displayed.
-	t.rightPanel.AddItem(t.board, 0, 0, 1, 1, 0, 0, false)
-
-	t.focusedColumn = 0
+	t.rightPanel.AddItem(t.board, 0, 0, 1, 1, 0, 0, true)
 
 	// Assert focus on the right panel. This is needed for board input
 	// capture to work.
 	t.app.SetFocus(t.boardColumns[0])
+	t.focusedColumn = 0
 }
 
 // updateColumn clears the focused column of the board and updates the
@@ -192,7 +190,8 @@ func (t *TUI) updateColumn(colIdx int) {
 	}
 
 	currentRow := 0
-	for _, task := range t.boardColumnsData[t.focusedColumn].GetTasks() {
+	for _, task := range t.boardColumnsData[colIdx].GetTasks() {
+		task := task
 		t.boardColumns[colIdx].SetCellSimple(currentRow, 0, task.Name)
 
 		// If task show description status is set to true, add the task
@@ -214,8 +213,8 @@ func (t *TUI) updateColumn(colIdx int) {
 
 // showTreeView clears the right panel and sets the tree view.
 func (t *TUI) showTreeView() {
-	t.rightPanel.SetTitle("Tree Navigation")
 	t.rightPanel.Clear()
+	t.rightPanel.SetTitle("Tree Navigation")
 	// Set right panel content to the tree view. This will override a
 	// board being dislayed.
 	t.rightPanel.AddItem(t.tree, 0, 0, 1, 1, 0, 0, true)
@@ -356,43 +355,52 @@ func WordWrap(text string, lineWidth int) []string {
 // for the tui struct.
 func (t *TUI) Populate() {
 	t.filterAndUpdateList(t.leftPanelWidth)
+	t.updateTree()
+}
+
+// updateTree updates the entire tview tree view primitive.
+func (t *TUI) updateTree() {
+	t.tree.GetRoot().ClearChildren()
 
 	// For each rooted board tree, attach to root node.
 	for _, board := range t.treeData {
-		boardNode := tview.NewTreeNode(board.GetTitle()).
-			SetReference(board).
+		b := board
+		boardNode := tview.NewTreeNode(b.GetTitle()).
+			SetReference(&b).
 			SetSelectable(true)
 		t.tree.GetRoot().AddChild(boardNode)
 
-		updateTree(boardNode, board)
+		addBoardToTree(boardNode, b)
 	}
 }
 
-// updateTree recursively updates the entire tview tree view primitive
-// given the board structure.
-func updateTree(node *tview.TreeNode, board tasks.Board) {
+// addBoardToTree recursively adds a given board and all its children to the tree
+// view.
+func addBoardToTree(node *tview.TreeNode, board tasks.Board) {
 	for _, column := range board.GetColumns() {
+		column := column
 		columnNode := tview.NewTreeNode(column.GetTitle()).
-			SetReference(column).
+			SetReference(&column).
 			SetSelectable(true)
 		node.AddChild(columnNode)
 
 		for _, task := range column.GetTasks() {
+			task := task
 			taskNode := tview.NewTreeNode(task.GetName()).
-				SetReference(task).
+				SetReference(&task).
 				SetSelectable(true)
 			columnNode.AddChild(taskNode)
 
 			if task.GetHasChild() {
 				childBoard := task.GetChild()
 				/*
-					childNode := tview.NewTreeNode(childBoard.GetTitle()).
-						SetReference(childBoard).
-						SetSelectable(true)
-					taskNode.AddChild(childNode)
+				   childNode := tview.NewTreeNode(childBoard.GetTitle()).
+				     SetReference(&childBoard).
+				     SetSelectable(true)
+				   taskNode.AddChild(childNode)
 				*/
 
-				updateTree(taskNode, *childBoard)
+				addBoardToTree(taskNode, *childBoard)
 			}
 		}
 	}
@@ -442,13 +450,13 @@ func (tui *TUI) globalInputCapture(event *tcell.EventKey) *tcell.EventKey {
 	case tcell.KeyTab: // Switch panel focus
 		switch tui.focusedPanel {
 		case tui.leftPanel: // Switch focus to right panel
-			tui.focusedPanel = tui.rightPanel
 			tui.app.SetFocus(tui.rightPanel)
+			tui.focusedPanel = tui.rightPanel
 			tui.leftPanel.SetBorder(false)
 			tui.rightPanel.SetBorder(true)
 		case tui.rightPanel: // Switch focus to left panel
-			tui.focusedPanel = tui.leftPanel
 			tui.app.SetFocus(tui.leftPanel)
+			tui.focusedPanel = tui.leftPanel
 			tui.rightPanel.SetBorder(false)
 			tui.leftPanel.SetBorder(true)
 		}
@@ -606,13 +614,13 @@ func (t *TUI) boardInputCapture() {
 				t.boardColumns[t.focusedColumn].SetSelectable(false, false)
 			}
 		case 'a':
+			// If focus is on the entire table, create a new board column to
+			// the right of the currently focused column.
 			if isFocusedOnTable {
-			} else {
-				/*
-					form := t.createListForm(t.calcTaskIdx(row, t.leftPanelWidth))
-					t.showModal(form)
-				*/
-				return event
+				// TODO: form := t.createBoardColumnForm(t.calcTaskIdxBoard(selectedRow, 50))
+			} else { // Otherwise, focus is on a task in the column, create a new a new board task underneath the currently focused task.
+				form := t.createBoardTaskForm(t.calcTaskIdxBoard(selectedRow, 50))
+				t.showModal(form)
 			}
 			/* Note: dont forget to reflect changes to treeview */
 			// case 'd'
@@ -687,11 +695,13 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 		t.filterAndUpdateList(t.leftPanelWidth)
 
 		t.closeModal()
+		t.app.SetFocus(t.leftPanel)
 	})
 
 	form.AddButton("Cancel", func() {
 		// Close the modal without doing anything
 		t.closeModal()
+		t.app.SetFocus(t.leftPanel)
 	})
 
 	return form
@@ -729,44 +739,56 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 		task.SetDescription(description)
 
 		if createChildBoard {
-			t.addChildBoard(name, currentIdx)
+			if err := t.createAndAddChildBoard(name, currentIdx, task); err != nil {
+				log.Printf("Failed to create and add child board for %q task: %v\n", name, err)
+			}
 		}
 
 		t.boardColumnsData[t.focusedColumn].InsertTask(task, currentIdx+1)
 		t.boardColumnsData[t.focusedColumn].UpdatePriorities(currentIdx + 1)
 
+		// Update the column to show the newly added task
 		t.updateColumn(t.focusedColumn)
 
+		// Update tree view to include the newly added board and its
+		// children.
+		t.updateTree()
+
 		t.closeModal()
+		t.app.SetFocus(t.boardColumns[t.focusedColumn])
 	})
 
 	form.AddButton("Cancel", func() {
 		// Close the modal without doing anything
 		t.closeModal()
+		t.app.SetFocus(t.boardColumns[t.focusedColumn])
 	})
 
 	return form
 }
 
-// addChildBoard creates and adds a child board for a newly constructed
-// task.
-func (t *TUI) addChildBoard(name string, currentIdx int) {
-	// Create a new board
-	// Set `Title` to name
-	// Set `ParentBoard` to the t.board field
-	// Set `ParentTask` to
-	// t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
+// createAndAddChildBoard creates and adds a child board for a
+// newly constructed task.
+func (t *TUI) createAndAddChildBoard(name string, currentIdx int, task *tasks.BoardTask) error {
+	node := t.tree.GetCurrentNode()
+	ref := node.GetReference()
+	parentBoard, ok := ref.(*tasks.Board)
+	if !ok {
+		return errors.New("current node in tree view does not reference a Board")
+	}
 
-	// Add new board to the list of child boards for the currently focused
-	// column.
-	// Set the `child` BoardTask field to the new board
-	// Set the `HasChild` BoardTask field to true
+	newBoard := tasks.NewBoard(name)
+	newBoard.SetParentTask(t.boardColumnsData[t.focusedColumn].GetTask(currentIdx))
+	newBoard.SetParentBoard(parentBoard)
 
-	// Update tree view to show newly added board.
-	// t.updateTree()
+	parentBoard.AddChild(newBoard)
+
+	task.SetChild(newBoard)
+	task.SetHasChild(true)
+	return nil
 }
 
-// editListForm creates and returns a tview form for creating a new
+// editListForm creates and returns a tview form for editing a
 // todo list task.
 func (t *TUI) editListForm(currentIdx int) *tview.Form {
 	tasks := t.taskData.GetTasks()
@@ -792,8 +814,6 @@ func (t *TUI) editListForm(currentIdx int) *tview.Form {
 	})
 
 	form.AddButton("Save", func() {
-		t.closeModal()
-
 		// Update task in data slice
 		task.SetName(name)
 		task.SetDescription(description)
@@ -801,11 +821,15 @@ func (t *TUI) editListForm(currentIdx int) *tview.Form {
 
 		// Update tview list
 		t.filterAndUpdateList(t.leftPanelWidth)
+
+		t.closeModal()
+		t.app.SetFocus(t.leftPanel)
 	})
 
 	form.AddButton("Cancel", func() {
 		// Close the modal without doing anything
 		t.closeModal()
+		t.app.SetFocus(t.leftPanel)
 	})
 
 	return form
@@ -815,5 +839,4 @@ func (t *TUI) editListForm(currentIdx int) *tview.Form {
 // main grid.
 func (t *TUI) closeModal() {
 	t.pages.RemovePage("modal")
-	t.app.SetFocus(t.mainGrid)
 }
