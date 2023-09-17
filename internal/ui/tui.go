@@ -16,10 +16,11 @@ type TUI struct {
 	pages    *tview.Pages
 	mainGrid *tview.Grid
 
-	leftPanel      *tview.Grid
-	leftPanelWidth int
-	rightPanel     *tview.Grid
-	focusedPanel   *tview.Grid
+	leftPanel       *tview.Grid
+	leftPanelWidth  int
+	rightPanel      *tview.Grid
+	rightPanelWidth int
+	focusedPanel    *tview.Grid
 
 	list     *tview.Table
 	taskData *tasks.TodoList
@@ -108,7 +109,7 @@ func (t *TUI) Init(tl *tasks.TodoList, b []tasks.Board) {
 		SetColumns(-1, 1, -4).
 		AddItem(t.leftPanel, 0, 0, 1, 1, 0, 0, true).
 		AddItem(line, 0, 1, 1, 1, 0, 0, false).
-		AddItem(t.rightPanel, 0, 2, 1, 1, 0, 0, true)
+		AddItem(t.rightPanel, 0, 2, 1, 1, 0, 0, false)
 
 	// Initialize panel focus to left panel
 	t.focusedPanel = t.leftPanel
@@ -126,6 +127,7 @@ func (t *TUI) Init(tl *tasks.TodoList, b []tasks.Board) {
 	t.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
 		width, _ := screen.Size()
 		t.leftPanelWidth = int(float64(width)*0.2) - 2
+		t.rightPanelWidth = width - t.leftPanelWidth
 		return false
 	})
 
@@ -200,8 +202,8 @@ func (t *TUI) updateColumn(colIdx int) {
 		// If task show description status is set to true, add the task
 		// description to the list.
 		if task.GetShowDesc() {
-			// TODO: find righ panel width
-			wrappedDesc := WordWrap(task.Description, 50)
+			lineWidth := (t.rightPanelWidth / len(t.boardColumnsData)) - 4
+			wrappedDesc := WordWrap(task.Description, lineWidth)
 			for _, line := range wrappedDesc {
 				currentRow++
 				t.boardColumns[colIdx].SetCell(currentRow, 0, tview.NewTableCell(line).
@@ -282,8 +284,6 @@ func (t *TUI) filterAndUpdateList(columnWidth int) {
 		t.list.SetCellSimple(0, 0, "No tasks available")
 		return
 	}
-
-	// TODO: should probably firt sort the list by priority
 
 	currentRow := 0
 	for _, task := range t.taskData.GetTasks() {
@@ -368,14 +368,17 @@ func (t *TUI) updateTree() {
 	// For each rooted board tree, attach to root node.
 	for _, board := range t.treeData {
 		b := board
-		boardNode := tview.NewTreeNode(b.GetTitle()).
+		boardNode := tview.NewTreeNode("# " + b.GetTitle()).
 			SetReference(&b).
+			SetColor(tcell.ColorGreen).
 			SetExpanded(false).
 			SetSelectable(true)
 		t.tree.GetRoot().AddChild(boardNode)
 
 		addBoardToTree(boardNode, b)
 	}
+
+	t.tree.SetTopLevel(1)
 }
 
 // addBoardToTree recursively adds a given board and all its children to the tree
@@ -391,8 +394,9 @@ func addBoardToTree(node *tview.TreeNode, board tasks.Board) {
 		for _, task := range column.GetTasks() {
 			if task.GetHasChild() {
 				childBoard := task.GetChild()
-				childNode := tview.NewTreeNode(childBoard.GetTitle()).
+				childNode := tview.NewTreeNode("# " + childBoard.GetTitle()).
 					SetReference(childBoard).
+					SetColor(tcell.ColorGreen).
 					SetSelectable(true)
 				columnNode.AddChild(childNode)
 				addBoardToTree(childNode, *childBoard)
@@ -454,11 +458,13 @@ func (tui *TUI) globalInputCapture(event *tcell.EventKey) *tcell.EventKey {
 		case tui.leftPanel: // Switch focus to right panel
 			tui.app.SetFocus(tui.rightPanel)
 			tui.focusedPanel = tui.rightPanel
+			tui.list.SetSelectable(false, false)
 			tui.leftPanel.SetBorder(false)
 			tui.rightPanel.SetBorder(true)
 		case tui.rightPanel: // Switch focus to left panel
 			tui.app.SetFocus(tui.leftPanel)
 			tui.focusedPanel = tui.leftPanel
+			tui.list.SetSelectable(true, false)
 			tui.rightPanel.SetBorder(false)
 			tui.leftPanel.SetBorder(true)
 		}
@@ -619,17 +625,17 @@ func (t *TUI) boardInputCapture() {
 			// If focus is on the entire table, create a new board column to
 			// the right of the currently focused column.
 			if isFocusedOnTable {
-				// TODO: form := t.createBoardColumnForm(t.calcTaskIdxBoard(selectedRow, 50))
+				// t.createBoardColumnForm(t.calcTaskIdxBoard(selectedRow,
+				// t.rightPanelWidth))
 			} else { // Otherwise, focus is on a task in the column, create a new a new board task underneath the currently focused task.
-				form := t.createBoardTaskForm(t.calcTaskIdxBoard(selectedRow, 50))
+				form := t.createBoardTaskForm(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
 				t.showModal(form)
 			}
 			/* Note: dont forget to reflect changes to treeview */
 			// case 'd'
 		case ' ': // Toggle task description
 			if !isFocusedOnTable {
-				// TODO: replace 50 with right panel width
-				currentIdx := t.calcTaskIdxBoard(selectedRow, 50)
+				currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
 				// If calculated task index is within bounds, toggle task show
 				// description status, and update rendered list.
 				if err := t.boardColumnsData[t.focusedColumn].Bounds(currentIdx); err != nil {
