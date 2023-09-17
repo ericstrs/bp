@@ -135,6 +135,7 @@ func (t *TUI) Init(tl *tasks.TodoList, b []tasks.Board) {
 // showBoard clears the right panel and sets the board.
 func (t *TUI) showBoard(b *tasks.Board) {
 	t.rightPanel.Clear()
+	t.board.Clear()
 	t.boardColumns = nil // Reset columns
 	t.boardColumnsData = b.GetColumns()
 
