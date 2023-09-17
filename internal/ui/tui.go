@@ -385,23 +385,21 @@ func addBoardToTree(node *tview.TreeNode, board tasks.Board) {
 		node.AddChild(columnNode)
 
 		for _, task := range column.GetTasks() {
+			if task.GetHasChild() {
+				childBoard := task.GetChild()
+				childNode := tview.NewTreeNode(childBoard.GetTitle()).
+					SetReference(childBoard).
+					SetSelectable(true)
+				columnNode.AddChild(childNode)
+				addBoardToTree(childNode, *childBoard)
+				continue
+			}
+
 			task := task
 			taskNode := tview.NewTreeNode(task.GetName()).
 				SetReference(&task).
 				SetSelectable(true)
 			columnNode.AddChild(taskNode)
-
-			if task.GetHasChild() {
-				childBoard := task.GetChild()
-				/*
-				   childNode := tview.NewTreeNode(childBoard.GetTitle()).
-				     SetReference(&childBoard).
-				     SetSelectable(true)
-				   taskNode.AddChild(childNode)
-				*/
-
-				addBoardToTree(taskNode, *childBoard)
-			}
 		}
 	}
 }
