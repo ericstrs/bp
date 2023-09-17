@@ -70,11 +70,13 @@ func (t *TUI) Init(tl *tasks.TodoList, b []tasks.Board) {
 		return event
 	})
 
-	/*
-		t.tree.SetSelectedFunc(func(node *tview.TreeNode) {
-			// TODO: (?)
-		})
-	*/
+	t.tree.SetSelectedFunc(func(node *tview.TreeNode) {
+		if node.IsExpanded() {
+			node.Collapse()
+		} else {
+			node.Expand()
+		}
+	})
 
 	// Populate tui list with initial tasks
 	t.Populate()
@@ -368,6 +370,7 @@ func (t *TUI) updateTree() {
 		b := board
 		boardNode := tview.NewTreeNode(b.GetTitle()).
 			SetReference(&b).
+			SetExpanded(false).
 			SetSelectable(true)
 		t.tree.GetRoot().AddChild(boardNode)
 
