@@ -42,6 +42,23 @@ func (tree BoardTree) GetCurrent() *Board { return tree.Current }
 
 func (tree *BoardTree) SetCurrent(b *Board) { tree.Current = b }
 
+// NewBoard creates and returns a default board. A default board
+// consists of three empty columns: TODO, Working On, and Done.
+func NewBoard(name string) *Board {
+	// Create a new board
+	board := new(Board)
+	board.SetTitle(name)
+
+	// Add default columns
+	for _, title := range []string{"TODO", "Working On", "Done"} {
+		column := new(BoardColumn)
+		column.SetTitle(title)
+		board.AddColumn(column)
+	}
+
+	return board
+}
+
 func (b Board) GetTitle() string { return b.Title }
 
 func (b *Board) SetTitle(t string) { b.Title = t }
