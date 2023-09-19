@@ -803,7 +803,7 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 		task.SetDescription(description)
 
 		if createChildBoard {
-			if err := t.createAndAddChildBoard(name, currentIdx, task); err != nil {
+			if err := t.createAndAddChildBoard(name, task); err != nil {
 				log.Printf("Failed to create and add child board for %q task: %v\n", name, err)
 			}
 		}
@@ -833,7 +833,7 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 
 // createAndAddChildBoard creates and adds a child board for a
 // newly constructed task.
-func (t *TUI) createAndAddChildBoard(name string, currentIdx int, task *tasks.BoardTask) error {
+func (t *TUI) createAndAddChildBoard(name string, parentTask *tasks.BoardTask) error {
 	node := t.tree.GetCurrentNode()
 	ref := node.GetReference()
 	parentBoard, ok := ref.(*tasks.Board)
@@ -842,13 +842,14 @@ func (t *TUI) createAndAddChildBoard(name string, currentIdx int, task *tasks.Bo
 	}
 
 	newBoard := tasks.NewBoard(name)
-	newBoard.SetParentTask(t.boardColumnsData[t.focusedColumn].GetTask(currentIdx))
+	newBoard.SetParentTask(parentTask)
 	newBoard.SetParentBoard(parentBoard)
 
 	parentBoard.AddChild(newBoard)
 
-	task.SetChild(newBoard)
-	task.SetHasChild(true)
+	// Establish connection from new board to the parent task
+	parentTask.SetChild(newBoard)
+	parentTask.SetHasChild(true)
 	return nil
 }
 
