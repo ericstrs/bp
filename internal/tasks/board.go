@@ -86,13 +86,19 @@ func (b *Board) InsertChild(c *Board, index int) {
 	b.Children[index] = c
 }
 
-func (b *Board) RemoveChild(index int) error {
-	// Ensure index in within the correct range.
-	if index < 0 || index >= len(b.Children) {
-		return errors.New("failed to remove child board")
+func (b *Board) RemoveChild(c *Board) error {
+	// Loop through all children to find the match.
+	for idx, child := range b.Children {
+		// Using pointer equality for comparison
+		if child == c {
+			// Remove the child board by slicing.
+			b.Children = append(b.Children[:idx], b.Children[idx+1:]...)
+			return nil
+		}
 	}
-	b.Children = append(b.Children[:index], b.Children[index+1:]...)
-	return nil
+
+	// Return an error if the child is not found.
+	return errors.New("child not found")
 }
 
 func (b Board) GetColumns() []BoardColumn { return b.Columns }
