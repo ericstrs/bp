@@ -86,6 +86,8 @@ func (b *Board) InsertChild(c *Board, index int) {
 	b.Children[index] = c
 }
 
+// RemoveChild removes a given child from the parent board's children
+// slice. If the child board is not found, it return and error.
 func (b *Board) RemoveChild(c *Board) error {
 	// Loop through all children to find the match.
 	for idx, child := range b.Children {
