@@ -159,13 +159,10 @@ func (t *TUI) showBoard(b *tasks.Board) {
 	t.rightPanel.SetTitle(b.GetTitle())
 
 	// Loop over all the columns in the board
-	for i, column := range t.boardColumnsData {
-		column := column
-		// Need to create the kanban board column equivalent of a todo list
+	for i := range t.boardColumnsData {
 		table := tview.NewTable().
 			SetSelectable(false, false) // No selection by default
 		table.SetBorder(true)
-		table.SetTitle(column.GetTitle())
 
 		t.boardColumns = append(t.boardColumns, table)
 		t.updateColumn(i)
@@ -187,6 +184,7 @@ func (t *TUI) showBoard(b *tasks.Board) {
 // focused column's contents.
 func (t *TUI) updateColumn(colIdx int) {
 	t.boardColumns[colIdx].Clear()
+	t.boardColumns[colIdx].SetTitle(t.boardColumnsData[colIdx].GetTitle())
 
 	if len(t.boardColumnsData[colIdx].GetTasks()) == 0 {
 		t.boardColumns[colIdx].SetCellSimple(0, 0, "No tasks available")
@@ -639,8 +637,19 @@ func (t *TUI) boardInputCapture() {
 				form := t.createBoardTaskForm(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
 				t.showModal(form)
 			}
-			/* Note: dont forget to reflect changes to treeview */
-			// case 'd'
+		/* Note: dont forget to reflect changes to treeview */
+		case 'e':
+			if isFocusedOnTable { // Edit board column
+				form := t.editColumnForm()
+				t.showModal(form)
+			} else { // Edit board tasks
+				form := t.editBoardTaskForm(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+				t.showModal(form)
+			}
+		case 'd':
+			if isFocusedOnTable {
+			} else {
+			}
 		case ' ': // Toggle task description
 			if !isFocusedOnTable {
 				currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
@@ -842,14 +851,8 @@ func (t *TUI) createAndAddChildBoard(name string, parentTask *tasks.BoardTask) e
 	}
 
 	newBoard := tasks.NewBoard(name)
-	newBoard.SetParentTask(parentTask)
-	newBoard.SetParentBoard(parentBoard)
+	createConnection(parentTask, parentBoard, newBoard)
 
-	parentBoard.AddChild(newBoard)
-
-	// Establish connection from new board to the parent task
-	parentTask.SetChild(newBoard)
-	parentTask.SetHasChild(true)
 	return nil
 }
 
@@ -900,8 +903,115 @@ func (t *TUI) editListForm(currentIdx int) *tview.Form {
 	return form
 }
 
+// editColumnForm creates and returns a tview form for editing a
+// board column.
+func (t *TUI) editColumnForm() *tview.Form {
+	column := &t.boardColumnsData[t.focusedColumn]
+	name := column.GetTitle()
+
+	form := tview.NewForm()
+	form.SetBorder(true)
+	form.SetTitle("Edit Task")
+
+	// Define the input fields for the forms and update field variables if
+	// user makes any changes to the default values.
+	form.AddInputField("Name", name, 20, nil, func(text string) {
+		name = text
+	})
+
+	form.AddButton("Save", func() {
+		// Update task in data slice
+		column.SetTitle(name)
+
+		// Update tview list
+		t.updateColumn(t.focusedColumn)
+
+		t.updateTree()
+
+		t.closeModal()
+		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+	})
+
+	form.AddButton("Cancel", func() {
+		// Close the modal without doing anything
+		t.closeModal()
+		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+	})
+
+	return form
+}
+
+// editBoardTaskForm creates and returns a tview form for editing a
+// todo list task.
+func (t *TUI) editBoardTaskForm(currentIdx int) *tview.Form {
+	task := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
+	name := task.GetName()
+	description := task.GetDescription()
+
+	form := tview.NewForm()
+	form.SetBorder(true)
+	form.SetTitle("Edit Task")
+
+	// Define the input fields for the forms and update field variables if
+	// user makes any changes to the default values.
+	form.AddInputField("Name", name, 20, nil, func(text string) {
+		name = text
+	})
+	form.AddInputField("Description", description, 50, nil, func(text string) {
+		description = text
+	})
+
+	form.AddButton("Save", func() {
+		// Update task
+		task.SetName(name)
+		task.SetDescription(description)
+
+		// Update tview list
+		t.updateColumn(t.focusedColumn)
+
+		t.updateTree()
+
+		t.closeModal()
+		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+	})
+
+	form.AddButton("Cancel", func() {
+		// Close the modal without doing anything
+		t.closeModal()
+		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+	})
+
+	return form
+}
+
 // closeModal removes that modal page and sets the focus back to the
 // main grid.
 func (t *TUI) closeModal() {
 	t.pages.RemovePage("modal")
+}
+
+// createConnection establishes a link between a board task and a board.
+func createConnection(parentTask *tasks.BoardTask, parentBoard, board *tasks.Board) {
+	// Estabilsh connection from board to parent task
+	board.SetParentTask(parentTask)
+	board.SetParentBoard(parentBoard)
+
+	parentBoard.AddChild(board)
+
+	// Establish connection from parent task to a board
+	parentTask.SetChild(board)
+	parentTask.SetHasChild(true)
+}
+
+// severConnection removes the link between a board task and a board.
+func severConnection(parentTask *tasks.BoardTask, parentBoard, board *tasks.Board) {
+	// Sever the connection from board to parent task
+	board.SetParentTask(nil)
+	board.SetParentBoard(nil)
+
+	parentBoard.RemoveChild(board)
+
+	// Remove connection from parent task to a board
+	parentTask.SetChild(nil)
+	parentTask.SetHasChild(false)
 }
