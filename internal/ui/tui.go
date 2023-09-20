@@ -26,7 +26,7 @@ type TUI struct {
 	taskData *tasks.TodoList
 
 	tree                      *tview.TreeView
-	treeData                  []*tasks.Board
+	treeData                  *tasks.BoardTree
 	board                     *tview.Grid
 	boardColumns              []*tview.Table
 	boardColumnsData          []tasks.BoardColumn
@@ -35,10 +35,10 @@ type TUI struct {
 }
 
 // Init intializes the tview app and sets up the UI.
-func (t *TUI) Init(tl *tasks.TodoList, b []*tasks.Board) {
+func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	t.app = tview.NewApplication()
 	t.taskData = tl
-	t.treeData = b
+	t.treeData = tree
 
 	width := 25
 	// Remove two from width to account for panel borders
@@ -363,9 +363,10 @@ func (t *TUI) Populate() {
 func (t *TUI) updateTree() {
 	t.tree.GetRoot().ClearChildren()
 
+	rootBoards := t.treeData.GetRootBoards()
 	// For each rooted board tree, attach to root node.
-	for i := range t.treeData {
-		board := t.treeData[i]
+	for i := range rootBoards {
+		board := rootBoards[i]
 		boardNode := tview.NewTreeNode("# " + board.GetTitle()).
 			SetReference(board).
 			SetColor(tcell.ColorGreen).
@@ -647,8 +648,27 @@ func (t *TUI) boardInputCapture() {
 				t.showModal(form)
 			}
 		case 'd':
-			if isFocusedOnTable {
-			} else {
+			if isFocusedOnTable { // Delete and buffer board column
+				node := t.tree.GetCurrentNode()
+				ref := node.GetReference()
+				board, ok := ref.(*tasks.Board)
+				if !ok {
+					log.Println("Failed to remove board column: current tree view node isn't of type Board.")
+					return event
+				}
+
+				column, err := board.RemoveColumn(t.focusedColumn)
+				if err != nil {
+					log.Printf("Failed to remove board column: %v\n", err)
+					return event
+				}
+				// Buffer column
+				t.treeData.SetColumnBuffer(column)
+
+				// Update and show board
+				t.showBoard(board)
+				t.updateTree()
+			} else { // Delete and buffer board task
 				column := &t.boardColumnsData[t.focusedColumn]
 				// Delete task from focused column
 				task, err := column.Remove(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
@@ -660,10 +680,10 @@ func (t *TUI) boardInputCapture() {
 				t.updateColumn(t.focusedColumn)
 				t.updateTree()
 
+				// Get current board
 				node := t.tree.GetCurrentNode()
 				ref := node.GetReference()
 				board, ok := ref.(*tasks.Board)
-
 				if !ok {
 					log.Println("Couldn't buffer deleted board task: current tree view node isn't of type Board.")
 					return event
@@ -674,13 +694,31 @@ func (t *TUI) boardInputCapture() {
 			}
 		case 'p':
 			if isFocusedOnTable {
-			} else {
-				currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
+				// Get buffered column
+				column := t.treeData.GetColumnBuffer()
 
+				// Get current board
 				node := t.tree.GetCurrentNode()
 				ref := node.GetReference()
 				board, ok := ref.(*tasks.Board)
+				if !ok {
+					log.Println("Couldn't paste column: current tree view node isn't of type Board.")
+					return event
+				}
 
+				// Insert column into board
+				board.InsertColumn(&column, t.focusedColumn+1)
+
+				// Update board and tree view
+				t.showBoard(board)
+				t.updateTree()
+			} else {
+				currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
+
+				// Get current board
+				node := t.tree.GetCurrentNode()
+				ref := node.GetReference()
+				board, ok := ref.(*tasks.Board)
 				if !ok {
 					log.Println("Couldn't paste task: current tree view node isn't of type Board.")
 					return event
