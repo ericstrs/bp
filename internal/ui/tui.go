@@ -649,6 +649,52 @@ func (t *TUI) boardInputCapture() {
 		case 'd':
 			if isFocusedOnTable {
 			} else {
+				column := &t.boardColumnsData[t.focusedColumn]
+				// Delete task from focused column
+				task, err := column.Remove(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+				if err != nil {
+					return event
+				}
+
+				// Update the focused column and tree view
+				t.updateColumn(t.focusedColumn)
+				t.updateTree()
+
+				node := t.tree.GetCurrentNode()
+				ref := node.GetReference()
+				board, ok := ref.(*tasks.Board)
+
+				if !ok {
+					log.Println("Couldn't buffer deleted board task: current tree view node isn't of type Board.")
+					return event
+				}
+
+				// Buffer returned deleted task
+				board.SetBuffer(task)
+			}
+		case 'p':
+			if isFocusedOnTable {
+			} else {
+				currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
+
+				node := t.tree.GetCurrentNode()
+				ref := node.GetReference()
+				board, ok := ref.(*tasks.Board)
+
+				if !ok {
+					log.Println("Couldn't paste task: current tree view node isn't of type Board.")
+					return event
+				}
+
+				// Read from buffer
+				task := board.GetBuffer()
+
+				// Add task to the todo list
+				t.boardColumnsData[t.focusedColumn].InsertTask(task, currentIdx+1)
+
+				// Update the focused column and tree view
+				t.updateColumn(t.focusedColumn)
+				t.updateTree()
 			}
 		case ' ': // Toggle task description
 			if !isFocusedOnTable {
