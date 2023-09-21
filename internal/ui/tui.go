@@ -57,16 +57,69 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 		SetRoot(root).
 		SetCurrentNode(root)
 	t.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		if event.Rune() == 'l' {
+		switch event.Rune() {
+		case 'l':
 			node := t.tree.GetCurrentNode()
 			ref := node.GetReference()
 			board, ok := ref.(*tasks.Board)
-
 			if !ok {
 				return event
 			}
 
 			t.showBoard(board)
+		case 'a': // Add a root board
+			node := t.tree.GetCurrentNode()
+			// If node is the root node, create a new root board.
+			if node.GetLevel() == 0 {
+				form := t.createRootBoardForm()
+				t.showModal(form)
+				return event
+			}
+		case 'd': // Delete a root board
+			node := t.tree.GetCurrentNode()
+			if node.GetLevel() != 1 {
+				return event
+			}
+			ref := node.GetReference()
+			board, ok := ref.(*tasks.Board)
+			if !ok {
+				log.Println("Failed to remove root board: current tree view node isn't of type Board.")
+				return event
+			}
+
+			// Remove root board
+			b, err := t.treeData.RemoveRoot(board)
+			if err != nil {
+				log.Printf("Failed to remove root board: %v\n", err)
+				return event
+			}
+
+			// Buffer deleted board
+			t.treeData.SetBoardBuffer(b)
+			// Update tree view
+			t.updateTree()
+			// Show updated tree view
+			t.showTreeView()
+		case 'p': // Paste buffered root board
+			node := t.tree.GetCurrentNode()
+			if node.GetLevel() != 0 {
+				return event
+			}
+
+			board := t.treeData.GetBoardBuffer()
+			cpy, err := board.DeepCopy()
+			if err != nil {
+				log.Printf("Failed to paste board: %v\n", err)
+				return event
+			}
+
+			// Append root board
+			t.treeData.AddRoot(cpy)
+
+			// Update tree view
+			t.updateTree()
+			// Show updated tree view
+			t.showTreeView()
 		}
 		return event
 	})
@@ -364,6 +417,14 @@ func (t *TUI) updateTree() {
 	t.tree.GetRoot().ClearChildren()
 
 	rootBoards := t.treeData.GetRootBoards()
+
+	// If there are no root boards,
+	if len(rootBoards) == 0 {
+		noBoardsNode := tview.NewTreeNode("No boards available")
+		t.tree.GetRoot().AddChild(noBoardsNode)
+		return
+	}
+
 	// For each rooted board tree, attach to root node.
 	for i := range rootBoards {
 		board := rootBoards[i]
@@ -376,8 +437,6 @@ func (t *TUI) updateTree() {
 
 		addBoardToTree(boardNode, board)
 	}
-
-	t.tree.SetTopLevel(1)
 }
 
 // addBoardToTree recursively adds a given board and all its children to the tree
@@ -648,6 +707,11 @@ func (t *TUI) boardInputCapture() {
 				t.showModal(form)
 			}
 		case 'd':
+			// Deleting a column that contains a task that references a board
+			// must be dealt with.
+			// Deleting a task that references a board must be dealt with.
+			// TODO: That is to say, connections must be severed.
+
 			if isFocusedOnTable { // Delete and buffer board column
 				node := t.tree.GetCurrentNode()
 				ref := node.GetReference()
@@ -693,6 +757,7 @@ func (t *TUI) boardInputCapture() {
 				board.SetBuffer(task)
 			}
 		case 'p':
+			// TODO: Connections must be made.
 			if isFocusedOnTable {
 				// Get buffered column
 				column := t.treeData.GetColumnBuffer()
@@ -814,6 +879,42 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 	})
 
 	return form
+}
+
+// createRootBoardForm creates and returns a tview form for creating
+// a new root board.
+func (t *TUI) createRootBoardForm() *tview.Form {
+	var name string
+
+	form := tview.NewForm()
+	form.SetBorder(true)
+	form.SetTitle("Create New Root Board")
+
+	form.AddInputField("Name", name, 20, nil, func(text string) {
+		name = text
+	})
+
+	form.AddButton("Save", func() {
+		board := tasks.NewBoard(name)
+		t.treeData.AddRoot(board)
+
+		// Update tree view
+		t.updateTree()
+		// Show updated tree view
+		t.showTreeView()
+
+		t.closeModal()
+		t.app.SetFocus(t.tree)
+	})
+
+	form.AddButton("Cancel", func() {
+		// Close the modal without doing anything
+		t.closeModal()
+		t.app.SetFocus(t.tree)
+	})
+
+	return form
+
 }
 
 // createColumnForm creates and returns a tview form for creating a
@@ -995,7 +1096,7 @@ func (t *TUI) editColumnForm() *tview.Form {
 
 	form := tview.NewForm()
 	form.SetBorder(true)
-	form.SetTitle("Edit Task")
+	form.SetTitle("Edit Column")
 
 	// Define the input fields for the forms and update field variables if
 	// user makes any changes to the default values.
@@ -1028,6 +1129,7 @@ func (t *TUI) editColumnForm() *tview.Form {
 // editBoardTaskForm creates and returns a tview form for editing a
 // todo list task.
 func (t *TUI) editBoardTaskForm(currentIdx int) *tview.Form {
+	var createChildBoard bool
 	task := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
 	name := task.GetName()
 	description := task.GetDescription()
@@ -1045,10 +1147,22 @@ func (t *TUI) editBoardTaskForm(currentIdx int) *tview.Form {
 		description = text
 	})
 
+	if !task.GetHasChild() {
+		form.AddCheckbox("Create a Board?", false, func(checked bool) {
+			createChildBoard = checked
+		})
+	}
+
 	form.AddButton("Save", func() {
 		// Update task
 		task.SetName(name)
 		task.SetDescription(description)
+
+		if createChildBoard {
+			if err := t.createAndAddChildBoard(name, task); err != nil {
+				log.Printf("Failed to create and add child board for %q task: %v\n", name, err)
+			}
+		}
 
 		// Update tview list
 		t.updateColumn(t.focusedColumn)
