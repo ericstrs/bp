@@ -7,8 +7,10 @@ import (
 )
 
 type BoardTree struct {
-	Root    *Board `yaml:"root"`
-	Current *Board `yaml:"current"`
+	RootBoards   []*Board    `yaml:"root_boards"`
+	Current      *Board      `yaml:"current"`
+	BoardBuffer  Board       `yaml:"board_buffer"`
+	ColumnBuffer BoardColumn `yaml:"column_buffer"`
 }
 
 type Board struct {
@@ -34,13 +36,50 @@ type BoardTask struct {
 
 var _ Taskable = &BoardTask{}
 
-func (tree BoardTree) GetRoot() *Board { return tree.Root }
+func (tree BoardTree) GetRootBoards() []*Board { return tree.RootBoards }
 
-func (tree *BoardTree) SetRoot(b *Board) { tree.Root = b }
+func (tree *BoardTree) AddRoot(b *Board) { tree.InsertRoot(b, -1) }
+
+func (tree *BoardTree) InsertRoot(b *Board, index int) {
+	// If index out of range, then append root board to the slice.
+	if index < 0 || index >= len(tree.RootBoards) {
+		tree.RootBoards = append(tree.RootBoards, b)
+		return
+	}
+	// Otherwise, insert child board at the specified index.
+	tree.RootBoards = append(tree.RootBoards[:index+1], tree.RootBoards[index:]...)
+	tree.RootBoards[index] = b
+}
+
+func (tree *BoardTree) RemoveRoot(b *Board) (Board, error) {
+	// Loop through all root boards to find the match.
+	for idx, board := range tree.RootBoards {
+		// Using pointer equality for comparison
+		if board == b {
+			// Copy board before removing.
+			cpy := tree.RootBoards[idx]
+
+			// Remove the root board by slicing.
+			tree.RootBoards = append(tree.RootBoards[:idx], tree.RootBoards[idx+1:]...)
+			return *cpy, nil
+		}
+	}
+
+	// Return an error if the root board is not found.
+	return Board{}, errors.New("root board not found")
+}
 
 func (tree BoardTree) GetCurrent() *Board { return tree.Current }
 
 func (tree *BoardTree) SetCurrent(b *Board) { tree.Current = b }
+
+func (tree BoardTree) GetBoardBuffer() Board { return tree.BoardBuffer }
+
+func (tree *BoardTree) SetBoardBuffer(b Board) { tree.BoardBuffer = b }
+
+func (tree BoardTree) GetColumnBuffer() BoardColumn { return tree.ColumnBuffer }
+
+func (tree *BoardTree) SetColumnBuffer(c BoardColumn) { tree.ColumnBuffer = c }
 
 // NewBoard creates and returns a default board. A default board
 // consists of three empty columns: TODO, Working On, and Done.
@@ -57,6 +96,44 @@ func NewBoard(name string) *Board {
 	}
 
 	return board
+}
+
+// DeepCopy creates a deep copy of the board, its children, and columns.
+// Returns a pointer to the new Board object, or an error if the
+// original board is null.
+//
+// This function is both computationally and memory intensive due to its
+// recursive nature, as it creates new instances for all children and
+// grandchildren, and so on.
+//
+// Note: The fields 'ParentBoard' and 'ParentTask' are references to objects
+// higher up in the tree, so they are not deep-copied by this function.
+// Board buffers are also not copied.
+func (b *Board) DeepCopy() (*Board, error) {
+	// Handle null board
+	if b == nil {
+		return nil, errors.New("board is null")
+	}
+
+	// Create a new Board pointer and populate its fields with the data from the original board.
+	newBoard := &Board{
+		ID:    b.ID,    // TODO: generate a new ID for the new board
+		Title: b.Title, // Copy the title
+	}
+
+	// Deep copy each child board.
+	for _, child := range b.Children {
+		copiedChild, err := child.DeepCopy()
+		if err != nil {
+			return nil, err
+		}
+		newBoard.Children = append(newBoard.Children, copiedChild)
+	}
+
+	// Shallow copy columns as these are value types
+	newBoard.Columns = append(newBoard.Columns, b.Columns...)
+
+	return newBoard, nil
 }
 
 func (b Board) GetTitle() string { return b.Title }
@@ -116,6 +193,21 @@ func (b *Board) InsertColumn(c *BoardColumn, index int) {
 	// Otherwise, insert the column at the specified index.
 	b.Columns = append(b.Columns[:index+1], b.Columns[index:]...)
 	b.Columns[index] = *c
+}
+
+func (b *Board) RemoveColumn(index int) (BoardColumn, error) {
+	// Ensure index is in the correct range.
+	if index < 0 || index >= len(b.Columns) {
+		return BoardColumn{}, fmt.Errorf("index %d out of range", index)
+	}
+
+	// Copy column before removing.
+	cpy := b.Columns[index]
+
+	// Remove column
+	b.Columns = append(b.Columns[:index], b.Columns[index+1:]...)
+
+	return cpy, nil
 }
 
 func (b Board) GetBuffer() *BoardTask { return b.Buffer }
