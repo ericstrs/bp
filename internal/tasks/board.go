@@ -14,13 +14,11 @@ type BoardTree struct {
 }
 
 type Board struct {
-	ID          int           `yaml:"id"`
-	Title       string        `yaml:"title"`
-	ParentBoard *Board        `yaml:"parent_board"`
-	ParentTask  *BoardTask    `yaml:"parent_task"`
-	Children    []*Board      `yaml:"children"`
-	Columns     []BoardColumn `yaml:"columns"`
-	Buffer      *BoardTask    `yaml:"buffer"`
+	ID         int           `yaml:"id"`
+	Title      string        `yaml:"title"`
+	ParentTask *BoardTask    `yaml:"parent_task"`
+	Columns    []BoardColumn `yaml:"columns"`
+	Buffer     *BoardTask    `yaml:"buffer"`
 }
 
 type BoardColumn struct {
@@ -92,7 +90,7 @@ func NewBoard(name string) *Board {
 	for _, title := range []string{"TODO", "Working On", "Done"} {
 		column := new(BoardColumn)
 		column.SetTitle(title)
-		board.AddColumn(column)
+		board.AddColumn(*column)
 	}
 
 	return board
@@ -105,11 +103,7 @@ func NewBoard(name string) *Board {
 // This function is both computationally and memory intensive due to its
 // recursive nature, as it creates new instances for all children and
 // grandchildren, and so on.
-//
-// Note: The fields 'ParentBoard' and 'ParentTask' are references to objects
-// higher up in the tree, so they are not deep-copied by this function.
-// Board buffers are also not copied.
-func (b *Board) DeepCopy() (*Board, error) {
+func (b *Board) DeepCopy(parentTask *BoardTask) (*Board, error) {
 	// Handle null board
 	if b == nil {
 		return nil, errors.New("board is null")
@@ -117,82 +111,86 @@ func (b *Board) DeepCopy() (*Board, error) {
 
 	// Create a new Board pointer and populate its fields with the data from the original board.
 	newBoard := &Board{
-		ID:    b.ID,    // TODO: generate a new ID for the new board
-		Title: b.Title, // Copy the title
+		ID:         b.ID,    // TODO: generate a new ID for the new board
+		Title:      b.Title, // Copy the title
+		ParentTask: parentTask,
 	}
 
-	// Deep copy each child board.
-	for _, child := range b.Children {
-		copiedChild, err := child.DeepCopy()
+	// Deep copy columns
+	for _, col := range b.Columns {
+		cpy, err := col.DeepCopy()
 		if err != nil {
 			return nil, err
 		}
-		newBoard.Children = append(newBoard.Children, copiedChild)
+		newBoard.Columns = append(newBoard.Columns, cpy)
 	}
 
-	// Shallow copy columns as these are value types
-	newBoard.Columns = append(newBoard.Columns, b.Columns...)
-
 	return newBoard, nil
+}
+
+func (c *BoardColumn) DeepCopy() (BoardColumn, error) {
+	newColmun := BoardColumn{
+		Title: c.Title,
+	}
+
+	for _, task := range c.Tasks {
+		cpy, err := task.DeepCopy()
+		if err != nil {
+			return BoardColumn{}, err
+		}
+		newColmun.Tasks = append(newColmun.Tasks, cpy)
+	}
+
+	return newColmun, nil
+}
+
+func (t *BoardTask) DeepCopy() (BoardTask, error) {
+	newTask := &Task{
+		Id:          t.Id,
+		Name:        t.Name,
+		Description: t.Description,
+		ShowDesc:    t.ShowDesc,
+		Started:     t.Started,
+		Finished:    t.Finished,
+		Priority:    t.Priority,
+	}
+
+	newBoardTask := BoardTask{
+		Task:     newTask,
+		HasChild: t.HasChild,
+	}
+
+	if t.HasChild {
+		var err error
+		newBoardTask.Child, err = t.Child.DeepCopy(&newBoardTask)
+		if err != nil {
+			return BoardTask{}, err
+		}
+	}
+	return newBoardTask, nil
 }
 
 func (b Board) GetTitle() string { return b.Title }
 
 func (b *Board) SetTitle(t string) { b.Title = t }
 
-func (b Board) GetParentBoard() *Board { return b.ParentBoard }
-
-func (b *Board) SetParentBoard(pb *Board) { b.ParentBoard = pb }
-
 func (b Board) GetParentTask() *BoardTask { return b.ParentTask }
 
 func (b *Board) SetParentTask(pt *BoardTask) { b.ParentTask = pt }
 
-func (b Board) GetChildren() []*Board { return b.Children }
-
-func (b *Board) AddChild(c *Board) { b.InsertChild(c, -1) }
-
-func (b *Board) InsertChild(c *Board, index int) {
-	// If index out of range, then append child board to the slice.
-	if index < 0 || index >= len(b.Children) {
-		b.Children = append(b.Children, c)
-		return
-	}
-	// Otherwise, insert child board at the specified index.
-	b.Children = append(b.Children[:index+1], b.Children[index:]...)
-	b.Children[index] = c
-}
-
-// RemoveChild removes a given child from the parent board's children
-// slice. If the child board is not found, it return and error.
-func (b *Board) RemoveChild(c *Board) error {
-	// Loop through all children to find the match.
-	for idx, child := range b.Children {
-		// Using pointer equality for comparison
-		if child == c {
-			// Remove the child board by slicing.
-			b.Children = append(b.Children[:idx], b.Children[idx+1:]...)
-			return nil
-		}
-	}
-
-	// Return an error if the child is not found.
-	return errors.New("child not found")
-}
-
 func (b Board) GetColumns() []BoardColumn { return b.Columns }
 
-func (b *Board) AddColumn(c *BoardColumn) { b.InsertColumn(c, -1) }
+func (b *Board) AddColumn(c BoardColumn) { b.InsertColumn(c, -1) }
 
-func (b *Board) InsertColumn(c *BoardColumn, index int) {
+func (b *Board) InsertColumn(c BoardColumn, index int) {
 	// Ensure index in within the correct range.
 	if index < 0 || index >= len(b.Columns) {
-		b.Columns = append(b.Columns, *c)
+		b.Columns = append(b.Columns, c)
 		return
 	}
 	// Otherwise, insert the column at the specified index.
 	b.Columns = append(b.Columns[:index+1], b.Columns[index:]...)
-	b.Columns[index] = *c
+	b.Columns[index] = c
 }
 
 func (b *Board) RemoveColumn(index int) (BoardColumn, error) {
