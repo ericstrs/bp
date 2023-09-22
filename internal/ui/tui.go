@@ -626,12 +626,18 @@ func (t *TUI) listBoardInputCapture(event *tcell.EventKey) {
 // currently displayed board.
 func (t *TUI) boardInputCapture() {
 	t.board.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		// If there a no columns table is being displayed, allow user to go
-		// back to tree navigation with 'h'.
+		// If there a no columns table is being displayed,
 		if t.isNoColumnsTableDisplayed {
 			switch event.Rune() {
-			case 'h':
+			case 'h': // go back to tree navigation
 				t.showTreeView()
+			case 'a': // add a new column
+				form, err := t.createColumnForm(t.focusedColumn)
+				if err != nil {
+					log.Println("Failed to add a column to the board: ", err)
+					return event
+				}
+				t.showModal(form)
 			}
 			return event
 		}
@@ -696,7 +702,6 @@ func (t *TUI) boardInputCapture() {
 				form := t.createBoardTaskForm(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
 				t.showModal(form)
 			}
-		/* Note: dont forget to reflect changes to treeview */
 		case 'e':
 			if isFocusedOnTable { // Edit board column
 				form := t.editColumnForm()
