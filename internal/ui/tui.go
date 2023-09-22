@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"errors"
 	"log"
 	"strings"
 	"time"
@@ -107,7 +106,7 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 			}
 
 			board := t.treeData.GetBoardBuffer()
-			cpy, err := board.DeepCopy()
+			cpy, err := board.DeepCopy(nil)
 			if err != nil {
 				log.Printf("Failed to paste board: %v\n", err)
 				return event
@@ -313,7 +312,7 @@ func (t *TUI) calcTaskIdxBoard(selectedRow, columnWidth int) int {
 		// If the task description is being shown, skip the next row
 		if task.GetShowDesc() {
 			// TODO shouldn't taskData not be used here?
-			wrappedDesc := WordWrap(t.taskData.GetTask(taskIdx).GetDescription(), columnWidth)
+			wrappedDesc := WordWrap(t.boardColumnsData[t.focusedColumn].GetTask(taskIdx).GetDescription(), columnWidth)
 			i += len(wrappedDesc) // Skip the row(s) meant for task description
 		}
 		taskIdx++
@@ -707,11 +706,6 @@ func (t *TUI) boardInputCapture() {
 				t.showModal(form)
 			}
 		case 'd':
-			// Deleting a column that contains a task that references a board
-			// must be dealt with.
-			// Deleting a task that references a board must be dealt with.
-			// TODO: That is to say, connections must be severed.
-
 			if isFocusedOnTable { // Delete and buffer board column
 				node := t.tree.GetCurrentNode()
 				ref := node.GetReference()
@@ -726,6 +720,7 @@ func (t *TUI) boardInputCapture() {
 					log.Printf("Failed to remove board column: %v\n", err)
 					return event
 				}
+
 				// Buffer column
 				t.treeData.SetColumnBuffer(column)
 
@@ -757,10 +752,15 @@ func (t *TUI) boardInputCapture() {
 				board.SetBuffer(task)
 			}
 		case 'p':
-			// TODO: Connections must be made.
 			if isFocusedOnTable {
 				// Get buffered column
 				column := t.treeData.GetColumnBuffer()
+
+				cpy, err := column.DeepCopy()
+				if err != nil {
+					log.Printf("Failed to paste board column: %v\n", err)
+					return event
+				}
 
 				// Get current board
 				node := t.tree.GetCurrentNode()
@@ -772,7 +772,7 @@ func (t *TUI) boardInputCapture() {
 				}
 
 				// Insert column into board
-				board.InsertColumn(&column, t.focusedColumn+1)
+				board.InsertColumn(cpy, t.focusedColumn+1)
 
 				// Update board and tree view
 				t.showBoard(board)
@@ -791,9 +791,19 @@ func (t *TUI) boardInputCapture() {
 
 				// Read from buffer
 				task := board.GetBuffer()
+				// If this board has no buffered task,  return early.
+				if task == nil {
+					return event
+				}
+
+				cpy, err := task.DeepCopy()
+				if err != nil {
+					log.Printf("Failed to paste board task: %v\n", err)
+					return event
+				}
 
 				// Add task to the todo list
-				t.boardColumnsData[t.focusedColumn].InsertTask(task, currentIdx+1)
+				t.boardColumnsData[t.focusedColumn].InsertTask(&cpy, currentIdx+1)
 
 				// Update the focused column and tree view
 				t.updateColumn(t.focusedColumn)
@@ -945,7 +955,7 @@ func (t *TUI) createColumnForm(focusedColumn int) (*tview.Form, error) {
 		column.SetTitle(name)
 
 		// Insert new column
-		board.InsertColumn(column, t.focusedColumn+1)
+		board.InsertColumn(*column, t.focusedColumn+1)
 
 		t.showBoard(board)
 
@@ -1028,15 +1038,8 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 // createAndAddChildBoard creates and adds a child board for a
 // newly constructed task.
 func (t *TUI) createAndAddChildBoard(name string, parentTask *tasks.BoardTask) error {
-	node := t.tree.GetCurrentNode()
-	ref := node.GetReference()
-	parentBoard, ok := ref.(*tasks.Board)
-	if !ok {
-		return errors.New("current node in tree view does not reference a Board")
-	}
-
 	newBoard := tasks.NewBoard(name)
-	createConnection(parentTask, parentBoard, newBoard)
+	createConnection(parentTask, newBoard)
 
 	return nil
 }
@@ -1189,12 +1192,9 @@ func (t *TUI) closeModal() {
 }
 
 // createConnection establishes a link between a board task and a board.
-func createConnection(parentTask *tasks.BoardTask, parentBoard, board *tasks.Board) {
+func createConnection(parentTask *tasks.BoardTask, board *tasks.Board) {
 	// Estabilsh connection from board to parent task
 	board.SetParentTask(parentTask)
-	board.SetParentBoard(parentBoard)
-
-	parentBoard.AddChild(board)
 
 	// Establish connection from parent task to a board
 	parentTask.SetChild(board)
@@ -1202,12 +1202,9 @@ func createConnection(parentTask *tasks.BoardTask, parentBoard, board *tasks.Boa
 }
 
 // severConnection removes the link between a board task and a board.
-func severConnection(parentTask *tasks.BoardTask, parentBoard, board *tasks.Board) {
+func severConnection(parentTask *tasks.BoardTask, board *tasks.Board) {
 	// Sever the connection from board to parent task
 	board.SetParentTask(nil)
-	board.SetParentBoard(nil)
-
-	parentBoard.RemoveChild(board)
 
 	// Remove connection from parent task to a board
 	parentTask.SetChild(nil)
