@@ -439,13 +439,12 @@ func (t *TUI) updateTree() {
 func addBoardToTree(node *tview.TreeNode, board *tasks.Board) {
 	columns := board.GetColumns()
 	for i := range columns {
-		column := columns[i]
-		columnNode := tview.NewTreeNode(column.GetTitle()).
-			SetReference(&column).
+		columnNode := tview.NewTreeNode(columns[i].GetTitle()).
+			SetReference(&columns[i]).
 			SetSelectable(true)
 		node.AddChild(columnNode)
 
-		tasks := column.GetTasks()
+		tasks := columns[i].GetTasks()
 		for i := range tasks {
 			task := tasks[i]
 			if task.GetHasChild() {
@@ -674,6 +673,38 @@ func (t *TUI) boardInputCapture() {
 			isFocusedOnTable = true
 		}
 		selectedRow, _ := t.boardColumns[t.focusedColumn].GetSelection()
+
+		if event.Key() == tcell.KeyEnter {
+			// If focused on a task
+			if !isFocusedOnTable {
+				task := t.boardColumnsData[t.focusedColumn].GetTask(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+				// If task has a child
+				if task.GetHasChild() {
+					parentNode := t.tree.GetCurrentNode()
+					ref := parentNode.GetReference()
+					_, ok := ref.(*tasks.Board)
+					if !ok {
+						log.Println("Failed to entere sub-board: current tree view node isn't of type Board.")
+						return event
+					}
+
+					childBoard := task.GetChild()
+					// Find tree view node that references focused board column
+					for _, node := range parentNode.GetChildren() {
+						if node.GetReference() == &t.boardColumnsData[t.focusedColumn] {
+							// Find tree view node that references focused board task
+							for _, n := range node.GetChildren() {
+								if n.GetReference() == childBoard {
+									t.tree.SetCurrentNode(n)
+									t.showBoard(childBoard)
+									return event
+								}
+							}
+						}
+					}
+				}
+			}
+		}
 
 		switch event.Rune() {
 		case 'l': // move right
