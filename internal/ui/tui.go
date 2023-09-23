@@ -11,9 +11,10 @@ import (
 )
 
 type TUI struct {
-	app      *tview.Application
-	pages    *tview.Pages
-	mainGrid *tview.Grid
+	app           *tview.Application
+	pages         *tview.Pages
+	mainGrid      *tview.Grid
+	zoomedInPanel bool
 
 	leftPanel       *tview.Grid
 	leftPanelWidth  int
@@ -149,17 +150,12 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	t.rightPanel.SetBorder(false)
 	t.showTreeView()
 
-	// Create line to separate the todo list and the kanban boards
-	line := tview.NewBox().
-		SetBackgroundColor(tcell.ColorWhite)
-
 	// Create the main parent grid
 	t.mainGrid = tview.NewGrid().
 		SetRows(0).
-		SetColumns(-1, 1, -4).
+		SetColumns(-1, -4).
 		AddItem(t.leftPanel, 0, 0, 1, 1, 0, 0, true).
-		AddItem(line, 0, 1, 1, 1, 0, 0, false).
-		AddItem(t.rightPanel, 0, 2, 1, 1, 0, 0, false)
+		AddItem(t.rightPanel, 0, 1, 1, 1, 0, 0, false)
 
 	// Initialize panel focus to left panel
 	t.focusedPanel = t.leftPanel
@@ -511,16 +507,47 @@ func (tui *TUI) globalInputCapture(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
 		case 'q': // Quit the program
 			tui.app.Stop()
+		case 'z': // Toggle panel zoom
+			tui.mainGrid.Clear()
+			switch tui.focusedPanel {
+			case tui.leftPanel:
+				if tui.zoomedInPanel {
+					tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
+						AddItem(tui.rightPanel, 0, 1, 1, 1, 0, 0, false)
+					tui.mainGrid.SetColumns(-1, -4)
+				} else {
+					tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true)
+					tui.mainGrid.SetColumns(0)
+				}
+			case tui.rightPanel:
+				if tui.zoomedInPanel {
+					tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
+						AddItem(tui.rightPanel, 0, 1, 1, 1, 0, 0, false)
+					tui.mainGrid.SetColumns(-1, -4)
+				} else {
+					tui.mainGrid.AddItem(tui.rightPanel, 0, 0, 1, 1, 0, 0, true)
+					tui.mainGrid.SetColumns(0)
+				}
+			}
+			tui.zoomedInPanel = !tui.zoomedInPanel
 		}
 	case tcell.KeyTab: // Switch panel focus
 		switch tui.focusedPanel {
 		case tui.leftPanel: // Switch focus to right panel
+			if tui.zoomedInPanel {
+				tui.mainGrid.Clear()
+				tui.mainGrid.AddItem(tui.rightPanel, 0, 0, 1, 1, 0, 0, true)
+			}
 			tui.app.SetFocus(tui.rightPanel)
 			tui.focusedPanel = tui.rightPanel
 			tui.list.SetSelectable(false, false)
 			tui.leftPanel.SetBorder(false)
 			tui.rightPanel.SetBorder(true)
 		case tui.rightPanel: // Switch focus to left panel
+			if tui.zoomedInPanel {
+				tui.mainGrid.Clear()
+				tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true)
+			}
 			tui.app.SetFocus(tui.leftPanel)
 			tui.focusedPanel = tui.leftPanel
 			tui.list.SetSelectable(true, false)
