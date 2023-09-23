@@ -172,6 +172,11 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	// draw operation.
 	t.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
 		width, _ := screen.Size()
+		if t.zoomedInPanel {
+			t.leftPanelWidth = width
+			t.rightPanelWidth = width
+			return false
+		}
 		t.leftPanelWidth = int(float64(width)*0.2) - 2
 		t.rightPanelWidth = width - t.leftPanelWidth
 		return false
@@ -242,7 +247,12 @@ func (t *TUI) updateColumn(colIdx int) {
 	currentRow := 0
 	for _, task := range t.boardColumnsData[colIdx].GetTasks() {
 		task := task
-		t.boardColumns[colIdx].SetCellSimple(currentRow, 0, task.Name)
+		prefix := ""
+		if task.GetHasChild() {
+			prefix = "# "
+		}
+		name := prefix + task.GetName()
+		t.boardColumns[colIdx].SetCellSimple(currentRow, 0, name)
 
 		// If task show description status is set to true, add the task
 		// description to the list.
