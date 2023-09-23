@@ -16,9 +16,9 @@ type BoardTree struct {
 type Board struct {
 	ID         int           `yaml:"id"`
 	Title      string        `yaml:"title"`
-	ParentTask *BoardTask    `yaml:"parent_task"`
+	ParentTask *BoardTask    `yaml:"-"` // `yaml:"parent_task"`
 	Columns    []BoardColumn `yaml:"columns"`
-	Buffer     *BoardTask    `yaml:"buffer"`
+	Buffer     *BoardTask    `yaml:"-"` // `yaml:"buffer"`
 }
 
 type BoardColumn struct {
