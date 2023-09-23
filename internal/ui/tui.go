@@ -75,6 +75,21 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 				t.showModal(form)
 				return event
 			}
+		case 'e': // Edit root board
+			node := t.tree.GetCurrentNode()
+			// If node is the root node, edit new root board.
+			if node.GetLevel() == 1 {
+				node := t.tree.GetCurrentNode()
+				ref := node.GetReference()
+				board, ok := ref.(*tasks.Board)
+				if !ok {
+					log.Println("Failed to edit root board: current tree view node isn't of type Board")
+					return event
+				}
+				form := t.editRootBoardForm(board, node)
+				t.showModal(form)
+				return event
+			}
 		case 'd': // Delete a root board
 			node := t.tree.GetCurrentNode()
 			if node.GetLevel() != 1 {
@@ -684,7 +699,7 @@ func (t *TUI) boardInputCapture() {
 		}
 		selectedRow, _ := t.boardColumns[t.focusedColumn].GetSelection()
 
-		if event.Key() == tcell.KeyEnter {
+		if event.Rune() == 'L' || event.Key() == tcell.KeyEnter {
 			// If focused on a task
 			if !isFocusedOnTable {
 				task := t.boardColumnsData[t.focusedColumn].GetTask(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
@@ -1164,6 +1179,38 @@ func (t *TUI) editListForm(currentIdx int) *tview.Form {
 	return form
 }
 
+// editRootBoardForm creates and returns a tview form for editing a
+// root board.
+func (t *TUI) editRootBoardForm(board *tasks.Board, node *tview.TreeNode) *tview.Form {
+	name := board.GetTitle()
+
+	form := tview.NewForm()
+	form.SetBorder(true)
+	form.SetTitle("Edit Root Board")
+
+	// Define the input fields for the forms and update field variables if
+	// user makes any changes to the default values.
+	form.AddInputField("Name", name, 20, nil, func(text string) {
+		name = text
+	})
+
+	form.AddButton("Save", func() {
+		board.SetTitle(name)
+		// Update tree node that references the root board
+		node.SetText(name)
+		t.closeModal()
+		t.app.SetFocus(t.tree)
+	})
+
+	form.AddButton("Cancel", func() {
+		// Close the modal without doing anything
+		t.closeModal()
+		t.app.SetFocus(t.tree)
+	})
+
+	return form
+}
+
 // editColumnForm creates and returns a tview form for editing a
 // board column.
 func (t *TUI) editColumnForm() *tview.Form {
@@ -1230,8 +1277,10 @@ func (t *TUI) editBoardTaskForm(currentIdx int) *tview.Form {
 	}
 
 	form.AddButton("Save", func() {
-		// Update task
 		task.SetName(name)
+		if task.GetHasChild() {
+			task.GetChild().SetTitle(name)
+		}
 		task.SetDescription(description)
 
 		if createChildBoard {
