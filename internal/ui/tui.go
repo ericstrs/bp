@@ -34,6 +34,11 @@ type TUI struct {
 	isNoColumnsTableDisplayed bool
 }
 
+type NodeRef struct {
+	ID   int
+	Type string // This could be 'Board', 'Column', 'Task', etc.
+}
+
 // Init intializes the tview app and sets up the UI.
 func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	t.app = tview.NewApplication()
@@ -60,9 +65,9 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 		switch event.Rune() {
 		case 'l':
 			node := t.tree.GetCurrentNode()
-			ref := node.GetReference()
-			board, ok := ref.(*tasks.Board)
+			board, ok := t.getBoardRef(node)
 			if !ok {
+				log.Println("node isnt a board: ", board)
 				return event
 			}
 
@@ -80,8 +85,7 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 			// If node is the root node, edit new root board.
 			if node.GetLevel() == 1 {
 				node := t.tree.GetCurrentNode()
-				ref := node.GetReference()
-				board, ok := ref.(*tasks.Board)
+				board, ok := t.getBoardRef(node)
 				if !ok {
 					log.Println("Failed to edit root board: current tree view node isn't of type Board")
 					return event
@@ -95,8 +99,7 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 			if node.GetLevel() != 1 {
 				return event
 			}
-			ref := node.GetReference()
-			board, ok := ref.(*tasks.Board)
+			board, ok := t.getBoardRef(node)
 			if !ok {
 				log.Println("Failed to remove root board: current tree view node isn't of type Board.")
 				return event
@@ -122,7 +125,7 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 			}
 
 			board := t.treeData.GetBoardBuffer()
-			cpy, err := board.DeepCopy(nil)
+			cpy, err := board.DeepCopy(nil, t.treeData)
 			if err != nil {
 				log.Printf("Failed to paste board: %v\n", err)
 				return event
@@ -130,6 +133,7 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 
 			// Append root board
 			t.treeData.AddRoot(cpy)
+			log.Println("Adding a new root board with id: ", cpy.GetID())
 
 			// Update tree view
 			t.updateTree()
@@ -332,7 +336,6 @@ func (t *TUI) calcTaskIdxBoard(selectedRow, columnWidth int) int {
 
 		// If the task description is being shown, skip the next row
 		if task.GetShowDesc() {
-			// TODO shouldn't taskData not be used here?
 			wrappedDesc := WordWrap(t.boardColumnsData[t.focusedColumn].GetTask(taskIdx).GetDescription(), columnWidth)
 			i += len(wrappedDesc) // Skip the row(s) meant for task description
 		}
@@ -448,20 +451,21 @@ func (t *TUI) updateTree() {
 	// For each rooted board tree, attach to root node.
 	for i := range rootBoards {
 		board := rootBoards[i]
+		nr := NodeRef{ID: board.GetID(), Type: "Board"}
 		boardNode := tview.NewTreeNode("# " + board.GetTitle()).
-			SetReference(board).
+			SetReference(nr).
 			SetColor(tcell.ColorGreen).
 			SetExpanded(false).
 			SetSelectable(true)
 		t.tree.GetRoot().AddChild(boardNode)
 
-		addBoardToTree(boardNode, board)
+		t.addBoardToTree(boardNode, board)
 	}
 }
 
 // addBoardToTree recursively adds a given board and all its children to the tree
 // view.
-func addBoardToTree(node *tview.TreeNode, board *tasks.Board) {
+func (t *TUI) addBoardToTree(node *tview.TreeNode, board *tasks.Board) {
 	columns := board.GetColumns()
 	for i := range columns {
 		columnNode := tview.NewTreeNode(columns[i].GetTitle()).
@@ -473,13 +477,19 @@ func addBoardToTree(node *tview.TreeNode, board *tasks.Board) {
 		for i := range tasks {
 			task := tasks[i]
 			if task.GetHasChild() {
-				childBoard := task.GetChild()
+				id := task.GetChildID()
+				childBoard, err := t.treeData.GetBoardByID(id)
+				if err != nil {
+					log.Println("Failed to populate tree view:", err)
+					return
+				}
+				nr := NodeRef{ID: childBoard.GetID(), Type: "Board"}
 				childNode := tview.NewTreeNode("# " + childBoard.GetTitle()).
-					SetReference(childBoard).
+					SetReference(nr).
 					SetColor(tcell.ColorGreen).
 					SetSelectable(true)
 				columnNode.AddChild(childNode)
-				addBoardToTree(childNode, childBoard)
+				t.addBoardToTree(childNode, childBoard)
 				continue
 			}
 
@@ -706,20 +716,35 @@ func (t *TUI) boardInputCapture() {
 				// If task has a child
 				if task.GetHasChild() {
 					parentNode := t.tree.GetCurrentNode()
-					ref := parentNode.GetReference()
-					_, ok := ref.(*tasks.Board)
+					_, ok := t.getBoardRef(parentNode)
+
 					if !ok {
-						log.Println("Failed to entere sub-board: current tree view node isn't of type Board.")
+						log.Println("Failed to enter sub-board: current tree view node isn't of type Board.")
 						return event
 					}
 
-					childBoard := task.GetChild()
+					id := task.GetChildID()
+					childBoard, err := t.treeData.GetBoardByID(id)
+					if err != nil {
+						log.Println("Failed to enter sub-board: ", err)
+						return event
+					}
 					// Find tree view node that references focused board column
 					for _, node := range parentNode.GetChildren() {
-						if node.GetReference() == &t.boardColumnsData[t.focusedColumn] {
+						column, ok := getColumnRef(node)
+						if !ok {
+							log.Println("Failed to enter sub-board: board child tree view node isn't of type Column.")
+							return event
+						}
+						if column == &t.boardColumnsData[t.focusedColumn] {
 							// Find tree view node that references focused board task
 							for _, n := range node.GetChildren() {
-								if n.GetReference() == childBoard {
+								board, ok := t.getBoardRef(n)
+								if !ok {
+									log.Println("Failed to enter sub-board: found tree view node isn't of type Board.")
+									return event
+								}
+								if board == childBoard {
 									t.tree.SetCurrentNode(n)
 									t.showBoard(childBoard)
 									return event
@@ -796,8 +821,7 @@ func (t *TUI) boardInputCapture() {
 		case 'd':
 			if isFocusedOnTable { // Delete and buffer board column
 				node := t.tree.GetCurrentNode()
-				ref := node.GetReference()
-				board, ok := ref.(*tasks.Board)
+				board, ok := t.getBoardRef(node)
 				if !ok {
 					log.Println("Failed to remove board column: current tree view node isn't of type Board.")
 					return event
@@ -808,6 +832,9 @@ func (t *TUI) boardInputCapture() {
 					log.Printf("Failed to remove board column: %v\n", err)
 					return event
 				}
+
+				// TODO: tasks in the col that refs a board, remove that board from
+				// BoardTree.
 
 				// Buffer column
 				t.treeData.SetColumnBuffer(column)
@@ -823,14 +850,16 @@ func (t *TUI) boardInputCapture() {
 					return event
 				}
 
+				// TODO: if a task refs a board, remove that board from
+				// BoardTree.
+
 				// Update the focused column and tree view
 				t.updateColumn(t.focusedColumn)
 				t.updateTree()
 
 				// Get current board
 				node := t.tree.GetCurrentNode()
-				ref := node.GetReference()
-				board, ok := ref.(*tasks.Board)
+				board, ok := t.getBoardRef(node)
 				if !ok {
 					log.Println("Couldn't buffer deleted board task: current tree view node isn't of type Board.")
 					return event
@@ -844,7 +873,7 @@ func (t *TUI) boardInputCapture() {
 				// Get buffered column
 				column := t.treeData.GetColumnBuffer()
 
-				cpy, err := column.DeepCopy()
+				cpy, err := column.DeepCopy(t.treeData)
 				if err != nil {
 					log.Printf("Failed to paste board column: %v\n", err)
 					return event
@@ -852,8 +881,7 @@ func (t *TUI) boardInputCapture() {
 
 				// Get current board
 				node := t.tree.GetCurrentNode()
-				ref := node.GetReference()
-				board, ok := ref.(*tasks.Board)
+				board, ok := t.getBoardRef(node)
 				if !ok {
 					log.Println("Couldn't paste column: current tree view node isn't of type Board.")
 					return event
@@ -870,8 +898,7 @@ func (t *TUI) boardInputCapture() {
 
 				// Get current board
 				node := t.tree.GetCurrentNode()
-				ref := node.GetReference()
-				board, ok := ref.(*tasks.Board)
+				board, ok := t.getBoardRef(node)
 				if !ok {
 					log.Println("Couldn't paste task: current tree view node isn't of type Board.")
 					return event
@@ -884,7 +911,7 @@ func (t *TUI) boardInputCapture() {
 					return event
 				}
 
-				cpy, err := task.DeepCopy()
+				cpy, err := task.DeepCopy(t.treeData)
 				if err != nil {
 					log.Printf("Failed to paste board task: %v\n", err)
 					return event
@@ -993,8 +1020,9 @@ func (t *TUI) createRootBoardForm() *tview.Form {
 	})
 
 	form.AddButton("Save", func() {
-		board := tasks.NewBoard(name)
+		board := t.treeData.NewBoard(name)
 		t.treeData.AddRoot(board)
+		log.Println("Adding a new root board with id: ", board.GetID())
 
 		// Update tree view
 		t.updateTree()
@@ -1031,8 +1059,7 @@ func (t *TUI) createColumnForm(focusedColumn int) (*tview.Form, error) {
 
 	form.AddButton("Save", func() {
 		node := t.tree.GetCurrentNode()
-		ref := node.GetReference()
-		board, ok := ref.(*tasks.Board)
+		board, ok := t.getBoardRef(node)
 
 		if !ok {
 			//return errors.New("current tree view node isn't of type Board")
@@ -1089,7 +1116,8 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 		task := new(tasks.BoardTask)
 		task.SetTask(new(tasks.Task))
 		task.SetPriority(currentIdx + 1)
-		task.SetID(currentIdx + 1)
+		t.treeData.IncrementTaskCtr()
+		task.SetID(t.treeData.GetTaskCtr())
 		task.SetStarted(time.Now())
 		task.SetName(name)
 		task.SetDescription(description)
@@ -1126,7 +1154,8 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 // createAndAddChildBoard creates and adds a child board for a
 // newly constructed task.
 func (t *TUI) createAndAddChildBoard(name string, parentTask *tasks.BoardTask) error {
-	newBoard := tasks.NewBoard(name)
+	newBoard := t.treeData.NewBoard(name)
+	t.treeData.AddChildBoard(newBoard)
 	createConnection(parentTask, newBoard)
 
 	return nil
@@ -1279,7 +1308,13 @@ func (t *TUI) editBoardTaskForm(currentIdx int) *tview.Form {
 	form.AddButton("Save", func() {
 		task.SetName(name)
 		if task.GetHasChild() {
-			task.GetChild().SetTitle(name)
+			id := task.GetChildID()
+			childBoard, err := t.treeData.GetBoardByID(id)
+			if err != nil {
+				log.Printf("Failed to create and add child board for %q task: %v\n", err)
+				return
+			}
+			childBoard.SetTitle(name)
 		}
 		task.SetDescription(description)
 
@@ -1313,13 +1348,47 @@ func (t *TUI) closeModal() {
 	t.pages.RemovePage("modal")
 }
 
+// getBoardRef returns the Board referenced by a TreeNode.
+func (t *TUI) getBoardRef(n *tview.TreeNode) (*tasks.Board, bool) {
+	nr, ok := n.GetReference().(NodeRef)
+	if !ok {
+		return nil, false
+	}
+	if nr.Type != "Board" {
+		return nil, false
+	}
+
+	board, err := t.treeData.GetBoardByID(nr.ID)
+	if err != nil {
+		log.Println("Failed to get board reference: ", err)
+		return nil, false
+	}
+	return board, true
+}
+
+// getColumnRef returns the board column referenced by a TreeNode.
+func getColumnRef(n *tview.TreeNode) (*tasks.BoardColumn, bool) {
+	if column, ok := n.GetReference().(*tasks.BoardColumn); ok {
+		return column, true
+	}
+	return nil, false
+}
+
+// getTaskRef returns board task referenced by a TreeNode.
+func getTaskRef(n *tview.TreeNode) (*tasks.BoardTask, bool) {
+	if task, ok := n.GetReference().(*tasks.BoardTask); ok {
+		return task, true
+	}
+	return nil, false
+}
+
 // createConnection establishes a link between a board task and a board.
 func createConnection(parentTask *tasks.BoardTask, board *tasks.Board) {
 	// Estabilsh connection from board to parent task
 	board.SetParentTask(parentTask)
 
 	// Establish connection from parent task to a board
-	parentTask.SetChild(board)
+	parentTask.SetChildID(board.GetID())
 	parentTask.SetHasChild(true)
 }
 
@@ -1329,6 +1398,6 @@ func severConnection(parentTask *tasks.BoardTask, board *tasks.Board) {
 	board.SetParentTask(nil)
 
 	// Remove connection from parent task to a board
-	parentTask.SetChild(nil)
+	parentTask.SetChildID(-1)
 	parentTask.SetHasChild(false)
 }
