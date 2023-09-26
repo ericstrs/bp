@@ -961,12 +961,10 @@ func (t *TUI) boardInputCapture() {
 
 				// Read from buffer
 				task := t.treeData.TaskBuffer.GetTaskBuffer()
-				/*
-					// If this board has no buffered task, return early.
-					if task == nil {
-						return event
-					}
-				*/
+				// If this board has no buffered task, return early.
+				if task.Task == nil {
+					return event
+				}
 
 				cpy, err := task.DeepCopy(t.treeData, board, t.treeData.TaskBuffer.GetChildBoards())
 				if err != nil {
