@@ -253,7 +253,6 @@ func (t *TUI) showBoard(b *tasks.Board) {
 	// capture to work.
 	t.app.SetFocus(t.boardColumns[0])
 	t.focusedColumn = 0
-
 }
 
 // updateColumn clears the focused column of the board and updates the
@@ -757,6 +756,7 @@ func (t *TUI) boardInputCapture() {
 									log.Println("Failed to enter sub-board: found tree view node isn't of type Board.")
 									return event
 								}
+								log.Printf("%s == %s\n", board.GetTitle(), childBoard.GetTitle())
 								if board == childBoard {
 									t.tree.SetCurrentNode(n)
 									t.showBoard(childBoard)
@@ -1007,7 +1007,6 @@ func (t *TUI) removeRefBoard(board *tasks.Board) {
 		}
 		t.treeData.BoardBuffer.AddChild(childBoard)
 		t.treeData.RemoveChildBoard(childBoard)
-		board.RemoveChild(id)
 		t.removeRefBoard(childBoard) // remove childBoard's children
 	}
 }
@@ -1021,7 +1020,6 @@ func (t *TUI) removeRefColumn(board *tasks.Board) {
 		}
 		t.treeData.ColBuffer.AddChild(childBoard)
 		t.treeData.RemoveChildBoard(childBoard)
-		board.RemoveChild(id)
 		t.removeRefColumn(childBoard) // remove childBoard's children
 	}
 }
@@ -1232,8 +1230,8 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 		// Update the column to show the newly added task
 		t.updateColumn(t.focusedColumn)
 
-		// Update tree view to include the newly added board and its
-		// children.
+		// Update tree view to include the newly added task and its
+		// child if created.
 		t.updateTree()
 
 		t.closeModal()
