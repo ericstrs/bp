@@ -336,11 +336,15 @@ func (t *TUI) calcTaskIdxBoard(selectedRow, columnWidth int) int {
 
 	// Iterate through each row up to the selected row
 	for i := 0; i < selectedRow; i++ {
-		task := t.boardColumnsData[t.focusedColumn].GetTask(taskIdx)
+		task, err := t.boardColumnsData[t.focusedColumn].GetTask(taskIdx)
+		if err != nil {
+			log.Printf("Failed to calculate board task index: %v\n", err)
+			return taskIdx
+		}
 
 		// If the task description is being shown, skip the next row
 		if task.GetShowDesc() {
-			wrappedDesc := WordWrap(t.boardColumnsData[t.focusedColumn].GetTask(taskIdx).GetDescription(), columnWidth)
+			wrappedDesc := WordWrap(task.GetDescription(), columnWidth)
 			i += len(wrappedDesc) // Skip the row(s) meant for task description
 		}
 		taskIdx++
@@ -716,9 +720,12 @@ func (t *TUI) boardInputCapture() {
 		if event.Rune() == 'L' || event.Key() == tcell.KeyEnter {
 			// If focused on a task
 			if !isFocusedOnTable {
-				// TODO: there is no check if index is valid. This causes a
-				// panic when you try to press enter on a "no tasks" column cell
-				task := t.boardColumnsData[t.focusedColumn].GetTask(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+				task, err := t.boardColumnsData[t.focusedColumn].GetTask(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+				if err != nil {
+					log.Printf("Failed to enter sub-board: %v\n", err)
+					return event
+				}
+
 				// If task has a child
 				if task.GetHasChild() {
 					parentNode := t.tree.GetCurrentNode()
@@ -821,7 +828,11 @@ func (t *TUI) boardInputCapture() {
 				form := t.editColumnForm()
 				t.showModal(form)
 			} else { // Edit board tasks
-				form := t.editBoardTaskForm(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+				form, err := t.editBoardTaskForm(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+				if err != nil {
+					log.Printf("Failed to edit board task: %v\n", err)
+					return event
+				}
 				t.showModal(form)
 			}
 		case 'd':
@@ -975,10 +986,10 @@ func (t *TUI) boardInputCapture() {
 				currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
 				// If calculated task index is within bounds, toggle task show
 				// description status, and update rendered list.
-				if err := t.boardColumnsData[t.focusedColumn].Bounds(currentIdx); err != nil {
+				task, err := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
+				if err != nil {
 					return event
 				}
-				task := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
 				task.ShowDesc = !task.ShowDesc
 				t.updateColumn(t.focusedColumn)
 			}
@@ -1375,9 +1386,12 @@ func (t *TUI) editColumnForm() *tview.Form {
 
 // editBoardTaskForm creates and returns a tview form for editing a
 // todo list task.
-func (t *TUI) editBoardTaskForm(currentIdx int) *tview.Form {
+func (t *TUI) editBoardTaskForm(currentIdx int) (*tview.Form, error) {
 	var createChildBoard bool
-	task := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
+	task, err := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
+	if err != nil {
+		return nil, err
+	}
 	name := task.GetName()
 	description := task.GetDescription()
 
@@ -1416,6 +1430,7 @@ func (t *TUI) editBoardTaskForm(currentIdx int) *tview.Form {
 		if createChildBoard {
 			if err := t.createAndAddChildBoard(name, task); err != nil {
 				log.Printf("Failed to create and add child board for %q task: %v\n", name, err)
+				return
 			}
 		}
 
@@ -1434,7 +1449,7 @@ func (t *TUI) editBoardTaskForm(currentIdx int) *tview.Form {
 		t.app.SetFocus(t.boardColumns[t.focusedColumn])
 	})
 
-	return form
+	return form, nil
 }
 
 // closeModal removes that modal page and sets the focus back to the

@@ -457,7 +457,13 @@ func (bc BoardColumn) GetTitle() string { return bc.Title }
 
 func (bc *BoardColumn) SetTitle(t string) { bc.Title = t }
 
-func (bc BoardColumn) GetTask(index int) *BoardTask { return &bc.Tasks[index] }
+func (bc BoardColumn) GetTask(index int) (*BoardTask, error) {
+	// Ensure index is in the correct range.
+	if err := bc.Bounds(index); err != nil {
+		return nil, err
+	}
+	return &bc.Tasks[index], nil
+}
 
 func (bc BoardColumn) GetTasks() []BoardTask { return bc.Tasks }
 
