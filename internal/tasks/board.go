@@ -7,14 +7,32 @@ import (
 	"sync"
 )
 
+type BoardBuff struct {
+	BoardBuffer Board    `yaml:"board"`
+	ChildBoards []*Board `yaml:"child_boards"`
+}
+
+type ColumnBuff struct {
+	ColumnBuffer BoardColumn `yaml:"column"`
+	ChildBoards  []*Board    `yaml:"child_boards"`
+}
+
+type TaskBuff struct {
+	TaskBuffer  BoardTask `yaml:"task"`
+	ChildBoards []*Board  `yaml:"child_boards"`
+}
+
 type BoardTree struct {
-	RootBoards     []*Board    `yaml:"root_boards"`
-	ChildBoards    []*Board    `yaml:"child_boards"`
-	CurrentBoardID int         `yaml:"-"` //`yaml:"current_board_id"`
-	BoardBuffer    Board       `yaml:"board_buffer"`
-	ColumnBuffer   BoardColumn `yaml:"column_buffer"`
-	BoardCounter   int         `yaml:"board_counter"`
-	TaskCounter    int         `yaml:"task_counter"`
+	RootBoards     []*Board `yaml:"root_boards"`
+	ChildBoards    []*Board `yaml:"child_boards"`
+	CurrentBoardID int      `yaml:"-"` //`yaml:"current_board_id"`
+
+	BoardBuffer BoardBuff  `yaml:"board_buffer"`
+	ColBuffer   ColumnBuff `yaml:"column_buffer"`
+	TaskBuffer  TaskBuff   `yaml:"task_buffer"`
+
+	BoardCounter int `yaml:"board_counter"`
+	TaskCounter  int `yaml:"task_counter"`
 }
 
 type Board struct {
@@ -22,7 +40,8 @@ type Board struct {
 	Title      string        `yaml:"title"`
 	ParentTask *BoardTask    `yaml:"-"` //`yaml:"parent_task_id"`
 	Columns    []BoardColumn `yaml:"columns"`
-	Buffer     *BoardTask    `yaml:"-"` //`yaml:"buffer_task_id"`
+
+	Children []int `yaml:"children"`
 }
 
 type BoardColumn struct {
@@ -38,7 +57,126 @@ type BoardTask struct {
 
 var _ Taskable = &BoardTask{}
 
+func (bb BoardBuff) GetBoardBuffer() Board { return bb.BoardBuffer }
+
+func (bb *BoardBuff) SetBoardBuffer(b Board) { bb.BoardBuffer = b }
+
+func (bb *BoardBuff) Clear() { bb.ChildBoards = bb.ChildBoards[:0] }
+
+func (bb BoardBuff) GetChildBoards() []*Board { return bb.ChildBoards }
+
+func (bb *BoardBuff) AddChild(b *Board) { bb.InsertChild(b, -1) }
+
+func (bb *BoardBuff) InsertChild(b *Board, index int) {
+	// If index out of range, then append child board to the slice.
+	if index < 0 || index >= len(bb.ChildBoards) {
+		bb.ChildBoards = append(bb.ChildBoards, b)
+		return
+	}
+	// Otherwise, insert child board at the specified index.
+	bb.ChildBoards = append(bb.ChildBoards[:index+1], bb.ChildBoards[index:]...)
+	bb.ChildBoards[index] = b
+}
+
+func (bb *BoardBuff) RemoveChild(b *Board) (Board, error) {
+	// Loop through all child boards to find the match.
+	for idx, board := range bb.ChildBoards {
+		// Using pointer equality for comparison
+		if board == b {
+			// Copy board before removing.
+			cpy := bb.ChildBoards[idx]
+
+			// Remove the child board by slicing.
+			bb.ChildBoards = append(bb.ChildBoards[:idx], bb.ChildBoards[idx+1:]...)
+			return *cpy, nil
+		}
+	}
+
+	// Return an error if the child board is not found.
+	return Board{}, fmt.Errorf("child board with id %d not found", b.ID)
+}
+
+func (cb ColumnBuff) GetColumnBuffer() BoardColumn { return cb.ColumnBuffer }
+
+func (cb *ColumnBuff) SetColumnBuffer(b BoardColumn) { cb.ColumnBuffer = b }
+
+func (cb *ColumnBuff) Clear() { cb.ChildBoards = cb.ChildBoards[:0] }
+
+func (cb ColumnBuff) GetChildBoards() []*Board { return cb.ChildBoards }
+
+func (cb *ColumnBuff) AddChild(b *Board) { cb.InsertChild(b, -1) }
+
+func (cb *ColumnBuff) InsertChild(b *Board, index int) {
+	// If index out of range, then append child board to the slice.
+	if index < 0 || index >= len(cb.ChildBoards) {
+		cb.ChildBoards = append(cb.ChildBoards, b)
+		return
+	}
+	// Otherwise, insert child board at the specified index.
+	cb.ChildBoards = append(cb.ChildBoards[:index+1], cb.ChildBoards[index:]...)
+	cb.ChildBoards[index] = b
+}
+
+func (cb *ColumnBuff) RemoveChild(b *Board) (Board, error) {
+	// Loop through all child boards to find the match.
+	for idx, board := range cb.ChildBoards {
+		// Using pointer equality for comparison
+		if board == b {
+			// Copy board before removing.
+			cpy := cb.ChildBoards[idx]
+
+			// Remove the child board by slicing.
+			cb.ChildBoards = append(cb.ChildBoards[:idx], cb.ChildBoards[idx+1:]...)
+			return *cpy, nil
+		}
+	}
+
+	// Return an error if the child board is not found.
+	return Board{}, fmt.Errorf("child board with id %d not found", b.ID)
+}
+
+func (tb TaskBuff) GetTaskBuffer() BoardTask { return tb.TaskBuffer }
+
+func (tb *TaskBuff) SetTaskBuffer(b BoardTask) { tb.TaskBuffer = b }
+
+func (tb *TaskBuff) Clear() { tb.ChildBoards = tb.ChildBoards[:0] }
+
+func (tb TaskBuff) GetChildBoards() []*Board { return tb.ChildBoards }
+
+func (tb *TaskBuff) AddChild(b *Board) { tb.InsertChild(b, -1) }
+
+func (tb *TaskBuff) InsertChild(b *Board, index int) {
+	// If index out of range, then append child board to the slice.
+	if index < 0 || index >= len(tb.ChildBoards) {
+		tb.ChildBoards = append(tb.ChildBoards, b)
+		return
+	}
+	// Otherwise, insert child board at the specified index.
+	tb.ChildBoards = append(tb.ChildBoards[:index+1], tb.ChildBoards[index:]...)
+	tb.ChildBoards[index] = b
+}
+
+func (tb *TaskBuff) RemoveChild(b *Board) (Board, error) {
+	// Loop through all child boards to find the match.
+	for idx, board := range tb.ChildBoards {
+		// Using pointer equality for comparison
+		if board == b {
+			// Copy board before removing.
+			cpy := tb.ChildBoards[idx]
+
+			// Remove the child board by slicing.
+			tb.ChildBoards = append(tb.ChildBoards[:idx], tb.ChildBoards[idx+1:]...)
+			return *cpy, nil
+		}
+	}
+
+	// Return an error if the child board is not found.
+	return Board{}, fmt.Errorf("child board with id %d not found", b.ID)
+}
+
 func (tree BoardTree) GetRootBoards() []*Board { return tree.RootBoards }
+
+func (tree BoardTree) GetChildBoards() []*Board { return tree.ChildBoards }
 
 // GetBoardByID finds and returns a board. This function first searches
 // through child board and then root boards.
@@ -123,14 +261,6 @@ func (tree BoardTree) GetCurrentBoardID() int { return tree.CurrentBoardID }
 
 func (tree *BoardTree) SetCurrentBoardID(id int) { tree.CurrentBoardID = id }
 
-func (tree BoardTree) GetBoardBuffer() Board { return tree.BoardBuffer }
-
-func (tree *BoardTree) SetBoardBuffer(b Board) { tree.BoardBuffer = b }
-
-func (tree BoardTree) GetColumnBuffer() BoardColumn { return tree.ColumnBuffer }
-
-func (tree *BoardTree) SetColumnBuffer(c BoardColumn) { tree.ColumnBuffer = c }
-
 // NewBoard creates and returns a default board. A default board
 // consists of three empty columns: TODO, Working On, and Done.
 func (tree *BoardTree) NewBoard(name string) *Board {
@@ -152,17 +282,11 @@ func (tree *BoardTree) NewBoard(name string) *Board {
 
 func (tree BoardTree) GetBoardCtr() int { return tree.BoardCounter }
 
-func (tree *BoardTree) IncrementBoardCtr() {
-	tree.BoardCounter++
-	log.Println("incremented board ctr: ", tree.BoardCounter)
-}
+func (tree *BoardTree) IncrementBoardCtr() { tree.BoardCounter++ }
 
 func (tree BoardTree) GetTaskCtr() int { return tree.TaskCounter }
 
-func (tree *BoardTree) IncrementTaskCtr() {
-	tree.TaskCounter++
-	log.Println("incremented task ctr: ", tree.TaskCounter)
-}
+func (tree *BoardTree) IncrementTaskCtr() { tree.TaskCounter++ }
 
 // DeepCopy creates a deep copy of the board, its children, and columns.
 // Returns a pointer to the new Board object, or an error if the
@@ -171,7 +295,7 @@ func (tree *BoardTree) IncrementTaskCtr() {
 // This function is both computationally and memory intensive due to its
 // recursive nature, as it creates new instances for all children and
 // grandchildren, and so on.
-func (b *Board) DeepCopy(parentTask *BoardTask, tree *BoardTree) (*Board, error) {
+func (b *Board) DeepCopy(parentTask *BoardTask, tree *BoardTree, childBoards []*Board) (*Board, error) {
 	// Handle null board
 	if b == nil {
 		return nil, errors.New("board is null")
@@ -187,7 +311,7 @@ func (b *Board) DeepCopy(parentTask *BoardTask, tree *BoardTree) (*Board, error)
 
 	// Deep copy columns
 	for _, col := range b.Columns {
-		cpy, err := col.DeepCopy(tree)
+		cpy, err := col.DeepCopy(tree, newBoard, childBoards)
 		if err != nil {
 			return nil, err
 		}
@@ -197,13 +321,13 @@ func (b *Board) DeepCopy(parentTask *BoardTask, tree *BoardTree) (*Board, error)
 	return newBoard, nil
 }
 
-func (c *BoardColumn) DeepCopy(tree *BoardTree) (BoardColumn, error) {
+func (c *BoardColumn) DeepCopy(tree *BoardTree, parentBoard *Board, childBoards []*Board) (BoardColumn, error) {
 	newColmun := BoardColumn{
 		Title: c.Title,
 	}
 
 	for _, task := range c.Tasks {
-		cpy, err := task.DeepCopy(tree)
+		cpy, err := task.DeepCopy(tree, parentBoard, childBoards)
 		if err != nil {
 			return BoardColumn{}, err
 		}
@@ -213,7 +337,7 @@ func (c *BoardColumn) DeepCopy(tree *BoardTree) (BoardColumn, error) {
 	return newColmun, nil
 }
 
-func (t *BoardTask) DeepCopy(tree *BoardTree) (BoardTask, error) {
+func (t *BoardTask) DeepCopy(tree *BoardTree, parentBoard *Board, childBoards []*Board) (BoardTask, error) {
 	tree.IncrementTaskCtr()
 	newTask := &Task{
 		Id:          tree.GetTaskCtr(),
@@ -231,18 +355,29 @@ func (t *BoardTask) DeepCopy(tree *BoardTree) (BoardTask, error) {
 	}
 
 	if t.HasChild {
-		childBoard, err := tree.GetBoardByID(t.ChildID)
-		if err != nil {
-			log.Printf("Failed to set child board field: %v\n", err)
+		var childBoard *Board
+		childBoard = nil
+
+		// Deep copying a root board is breaking here. childBoards is
+		// RootBoards, but t.childID will live in BoardBuff.ChildBoards
+		// That being said, need to iterate over both lists.
+		for _, board := range childBoards {
+			if board.ID == t.ChildID {
+				childBoard = board
+			}
+		}
+
+		if childBoard == nil {
+			log.Printf("Failed to set child board field: couldn't find board with id = %d\n", t.ChildID)
 			return newBoardTask, nil
 		}
-		cpy, err := childBoard.DeepCopy(&newBoardTask, tree)
+		cpy, err := childBoard.DeepCopy(&newBoardTask, tree, childBoards)
 		if err != nil {
 			log.Printf("Failed to set child board field: %v\n", err)
 			return newBoardTask, nil
 		}
 		tree.AddChildBoard(cpy)
-
+		parentBoard.AddChild(cpy.ID)
 		newBoardTask.ChildID = cpy.ID
 	}
 	return newBoardTask, nil
@@ -290,9 +425,33 @@ func (b *Board) RemoveColumn(index int) (BoardColumn, error) {
 	return cpy, nil
 }
 
-func (b Board) GetBuffer() *BoardTask { return b.Buffer }
+func (b Board) GetChildren() []int { return b.Children }
 
-func (b *Board) SetBuffer(t *BoardTask) { b.Buffer = t }
+func (b *Board) AddChild(id int) { b.InsertChild(id, -1) }
+
+func (b *Board) InsertChild(id, index int) {
+	// Ensure index in within the correct range.
+	if index < 0 || index >= len(b.Children) {
+		b.Children = append(b.Children, id)
+		return
+	}
+	// Otherwise, insert the board id at the specified index.
+	b.Children = append(b.Children[:index+1], b.Children[index:]...)
+	b.Children[index] = id
+}
+
+func (b *Board) RemoveChild(id int) error {
+	// Loop through all child boards ids to find the match.
+	for idx, boardID := range b.Children {
+		if boardID == id {
+			// Remove the child board by slicing.
+			b.Children = append(b.Children[:idx], b.Children[idx+1:]...)
+			return nil
+		}
+	}
+	// Return an error if the child board is not found.
+	return errors.New("child board not found")
+}
 
 func (bc BoardColumn) GetTitle() string { return bc.Title }
 

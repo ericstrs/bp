@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"errors"
 	"log"
 	"strings"
 	"time"
@@ -111,9 +112,12 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 				log.Printf("Failed to remove root board: %v\n", err)
 				return event
 			}
-
 			// Buffer deleted board
-			t.treeData.SetBoardBuffer(b)
+			t.treeData.BoardBuffer.Clear()
+			t.treeData.BoardBuffer.SetBoardBuffer(b)
+
+			t.removeRefBoard(&b)
+
 			// Update tree view
 			t.updateTree()
 			// Show updated tree view
@@ -124,8 +128,8 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 				return event
 			}
 
-			board := t.treeData.GetBoardBuffer()
-			cpy, err := board.DeepCopy(nil, t.treeData)
+			board := t.treeData.BoardBuffer.GetBoardBuffer()
+			cpy, err := board.DeepCopy(nil, t.treeData, t.treeData.BoardBuffer.GetChildBoards())
 			if err != nil {
 				log.Printf("Failed to paste board: %v\n", err)
 				return event
@@ -712,6 +716,8 @@ func (t *TUI) boardInputCapture() {
 		if event.Rune() == 'L' || event.Key() == tcell.KeyEnter {
 			// If focused on a task
 			if !isFocusedOnTable {
+				// TODO: there is no check if index is valid. This causes a
+				// panic when you try to press enter on a "no tasks" column cell
 				task := t.boardColumnsData[t.focusedColumn].GetTask(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
 				// If task has a child
 				if task.GetHasChild() {
@@ -821,69 +827,107 @@ func (t *TUI) boardInputCapture() {
 		case 'd':
 			if isFocusedOnTable { // Delete and buffer board column
 				node := t.tree.GetCurrentNode()
-				board, ok := t.getBoardRef(node)
+				parentBoard, ok := t.getBoardRef(node)
 				if !ok {
 					log.Println("Failed to remove board column: current tree view node isn't of type Board.")
 					return event
 				}
 
-				column, err := board.RemoveColumn(t.focusedColumn)
+				t.treeData.ColBuffer.Clear()
+
+				// If a task in the column references a board, remove that board from
+				// child board slice. Buffer the task and board and its chilren.
+				for _, task := range t.boardColumnsData[t.focusedColumn].GetTasks() {
+					if task.GetHasChild() {
+						board, err := t.treeData.GetBoardByID(task.GetChildID())
+						if err != nil {
+							log.Printf("Failed to buffer a referenced board in the column: %v\n", err)
+							continue
+						}
+						_, err = t.treeData.RemoveChildBoard(board)
+						if err != nil {
+							log.Printf("Failed to remove and buffer child board: %v\n", err)
+							continue
+						}
+						// Buffer and remove immediate referenced child
+						t.treeData.ColBuffer.AddChild(board)
+						// Sever connection from parent board and child board
+						log.Println("Parentboard ", parentBoard.GetTitle(), " ; removing child ", board.GetID())
+						if err = parentBoard.RemoveChild(board.GetID()); err != nil {
+							log.Printf("Failed to remove child board from parent child boards slice: %v\n", err)
+							continue
+						}
+
+						// Buffer and remove any potential children
+						t.removeRefColumn(board)
+					}
+				}
+
+				column, err := parentBoard.RemoveColumn(t.focusedColumn)
 				if err != nil {
 					log.Printf("Failed to remove board column: %v\n", err)
 					return event
 				}
-
-				// TODO: tasks in the col that refs a board, remove that board from
-				// BoardTree.
-
-				// Buffer column
-				t.treeData.SetColumnBuffer(column)
+				t.treeData.ColBuffer.SetColumnBuffer(column)
 
 				// Update and show board
-				t.showBoard(board)
+				t.showBoard(parentBoard)
 				t.updateTree()
 			} else { // Delete and buffer board task
-				column := &t.boardColumnsData[t.focusedColumn]
-				// Delete task from focused column
-				task, err := column.Remove(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
-				if err != nil {
+				node := t.tree.GetCurrentNode()
+				parentBoard, ok := t.getBoardRef(node)
+				if !ok {
+					log.Println("Failed to remove board task: current tree view node isn't of type Board.")
 					return event
 				}
 
-				// TODO: if a task refs a board, remove that board from
-				// BoardTree.
+				// Delete task from focused column
+				taskIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
+				task, err := t.boardColumnsData[t.focusedColumn].Remove(taskIdx)
+				if err != nil {
+					return event
+				}
+				t.treeData.TaskBuffer.Clear()
+				t.treeData.TaskBuffer.SetTaskBuffer(*task)
+
+				// If task being deleted references a board, from it from child
+				// boards slice. Buffer the task and board and its children.
+				if task.GetHasChild() {
+					board, err := t.treeData.GetBoardByID(task.GetChildID())
+					if err != nil {
+						log.Printf("Failed to buffer referenced board: %v\n", err)
+					} else {
+						// Buffer and remove immediate referenced child
+						t.treeData.TaskBuffer.AddChild(board)
+						t.treeData.RemoveChildBoard(board)
+						// Sever connection from parent board and child board
+						parentBoard.RemoveChild(board.GetID())
+
+						// Buffer and remove any potential children
+						t.removeRefTask(board)
+					}
+				}
 
 				// Update the focused column and tree view
 				t.updateColumn(t.focusedColumn)
 				t.updateTree()
-
-				// Get current board
-				node := t.tree.GetCurrentNode()
-				board, ok := t.getBoardRef(node)
-				if !ok {
-					log.Println("Couldn't buffer deleted board task: current tree view node isn't of type Board.")
-					return event
-				}
-
-				// Buffer returned deleted task
-				board.SetBuffer(task)
 			}
 		case 'p':
-			if isFocusedOnTable {
-				// Get buffered column
-				column := t.treeData.GetColumnBuffer()
-
-				cpy, err := column.DeepCopy(t.treeData)
-				if err != nil {
-					log.Printf("Failed to paste board column: %v\n", err)
-					return event
-				}
-
+			if isFocusedOnTable { // Paste board column
 				// Get current board
 				node := t.tree.GetCurrentNode()
 				board, ok := t.getBoardRef(node)
 				if !ok {
 					log.Println("Couldn't paste column: current tree view node isn't of type Board.")
+					return event
+				}
+
+				// Get buffered column
+				column := t.treeData.ColBuffer.GetColumnBuffer()
+
+				cpy, err := column.DeepCopy(t.treeData, board, t.treeData.ColBuffer.GetChildBoards())
+				if err != nil {
+					log.Printf("Failed to paste board column: %v\n", err)
 					return event
 				}
 
@@ -893,9 +937,7 @@ func (t *TUI) boardInputCapture() {
 				// Update board and tree view
 				t.showBoard(board)
 				t.updateTree()
-			} else {
-				currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
-
+			} else { // Paste board task
 				// Get current board
 				node := t.tree.GetCurrentNode()
 				board, ok := t.getBoardRef(node)
@@ -904,14 +946,18 @@ func (t *TUI) boardInputCapture() {
 					return event
 				}
 
-				// Read from buffer
-				task := board.GetBuffer()
-				// If this board has no buffered task,  return early.
-				if task == nil {
-					return event
-				}
+				currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
 
-				cpy, err := task.DeepCopy(t.treeData)
+				// Read from buffer
+				task := t.treeData.TaskBuffer.GetTaskBuffer()
+				/*
+					// If this board has no buffered task, return early.
+					if task == nil {
+						return event
+					}
+				*/
+
+				cpy, err := task.DeepCopy(t.treeData, board, t.treeData.TaskBuffer.GetChildBoards())
 				if err != nil {
 					log.Printf("Failed to paste board task: %v\n", err)
 					return event
@@ -939,6 +985,49 @@ func (t *TUI) boardInputCapture() {
 		}
 		return event
 	})
+}
+
+// removeRefBoard moves a given board and all its children from the main
+// list of boards to a buffer board list.
+func (t *TUI) removeRefBoard(board *tasks.Board) {
+	for _, id := range board.GetChildren() {
+		childBoard, err := t.treeData.GetBoardByID(id)
+		if err != nil {
+			log.Printf("Failed to buffer a referenced child board: %v\n", err)
+			continue
+		}
+		t.treeData.BoardBuffer.AddChild(childBoard)
+		t.treeData.RemoveChildBoard(childBoard)
+		board.RemoveChild(id)
+		t.removeRefBoard(childBoard) // remove childBoard's children
+	}
+}
+
+func (t *TUI) removeRefColumn(board *tasks.Board) {
+	for _, id := range board.GetChildren() {
+		childBoard, err := t.treeData.GetBoardByID(id)
+		if err != nil {
+			log.Printf("Failed to buffer a referenced child board: %v\n", err)
+			continue
+		}
+		t.treeData.ColBuffer.AddChild(childBoard)
+		t.treeData.RemoveChildBoard(childBoard)
+		board.RemoveChild(id)
+		t.removeRefColumn(childBoard) // remove childBoard's children
+	}
+}
+
+func (t *TUI) removeRefTask(board *tasks.Board) {
+	for _, id := range board.GetChildren() {
+		childBoard, err := t.treeData.GetBoardByID(id)
+		if err != nil {
+			log.Printf("Failed to buffer a referenced child board: %v\n", err)
+			continue
+		}
+		t.treeData.TaskBuffer.AddChild(childBoard)
+		t.treeData.RemoveChildBoard(childBoard)
+		t.removeRefTask(childBoard) // remove childBoard's children
+	}
 }
 
 // showModal sets up a modal grid for the given form and displays it.
@@ -1154,9 +1243,14 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 // createAndAddChildBoard creates and adds a child board for a
 // newly constructed task.
 func (t *TUI) createAndAddChildBoard(name string, parentTask *tasks.BoardTask) error {
+	node := t.tree.GetCurrentNode()
+	parentBoard, ok := t.getBoardRef(node)
+	if !ok {
+		return errors.New("node doesn't reference a board")
+	}
 	newBoard := t.treeData.NewBoard(name)
 	t.treeData.AddChildBoard(newBoard)
-	createConnection(parentTask, newBoard)
+	createConnection(parentTask, parentBoard, newBoard)
 
 	return nil
 }
@@ -1164,6 +1258,7 @@ func (t *TUI) createAndAddChildBoard(name string, parentTask *tasks.BoardTask) e
 // editListForm creates and returns a tview form for editing a
 // todo list task.
 func (t *TUI) editListForm(currentIdx int) *tview.Form {
+
 	tasks := t.taskData.GetTasks()
 	task := &tasks[currentIdx]
 	name := task.GetName()
@@ -1383,13 +1478,15 @@ func getTaskRef(n *tview.TreeNode) (*tasks.BoardTask, bool) {
 }
 
 // createConnection establishes a link between a board task and a board.
-func createConnection(parentTask *tasks.BoardTask, board *tasks.Board) {
+func createConnection(parentTask *tasks.BoardTask, parentBoard, board *tasks.Board) {
 	// Estabilsh connection from board to parent task
 	board.SetParentTask(parentTask)
 
 	// Establish connection from parent task to a board
 	parentTask.SetChildID(board.GetID())
 	parentTask.SetHasChild(true)
+
+	parentBoard.AddChild(board.GetID())
 }
 
 // severConnection removes the link between a board task and a board.
