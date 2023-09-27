@@ -137,7 +137,6 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 
 			// Append root board
 			t.treeData.AddRoot(cpy)
-			log.Println("Adding a new root board with id: ", cpy.GetID())
 
 			// Update tree view
 			t.updateTree()
@@ -756,7 +755,6 @@ func (t *TUI) boardInputCapture() {
 									log.Println("Failed to enter sub-board: found tree view node isn't of type Board.")
 									return event
 								}
-								log.Printf("%s == %s\n", board.GetTitle(), childBoard.GetTitle())
 								if board == childBoard {
 									t.tree.SetCurrentNode(n)
 									t.showBoard(childBoard)
@@ -920,6 +918,7 @@ func (t *TUI) boardInputCapture() {
 				}
 
 				// Update the focused column and tree view
+				t.boardColumnsData[t.focusedColumn].UpdatePriorities(taskIdx)
 				t.updateColumn(t.focusedColumn)
 				t.updateTree()
 			}
@@ -976,6 +975,7 @@ func (t *TUI) boardInputCapture() {
 				t.boardColumnsData[t.focusedColumn].InsertTask(&cpy, currentIdx+1)
 
 				// Update the focused column and tree view
+				t.boardColumnsData[t.focusedColumn].UpdatePriorities(currentIdx)
 				t.updateColumn(t.focusedColumn)
 				t.updateTree()
 			}
@@ -1118,7 +1118,6 @@ func (t *TUI) createRootBoardForm() *tview.Form {
 	form.AddButton("Save", func() {
 		board := t.treeData.NewBoard(name)
 		t.treeData.AddRoot(board)
-		log.Println("Adding a new root board with id: ", board.GetID())
 
 		// Update tree view
 		t.updateTree()
@@ -1225,7 +1224,7 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 		}
 
 		t.boardColumnsData[t.focusedColumn].InsertTask(task, currentIdx+1)
-		t.boardColumnsData[t.focusedColumn].UpdatePriorities(currentIdx + 1)
+		t.boardColumnsData[t.focusedColumn].UpdatePriorities(currentIdx)
 
 		// Update the column to show the newly added task
 		t.updateColumn(t.focusedColumn)
