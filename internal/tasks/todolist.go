@@ -33,16 +33,14 @@ func (t *TodoList) GetTitle() string { return t.Title }
 
 func (t *TodoList) SetTitle(s string) { t.Title = s }
 
-func (t *TodoList) GetTask(index int) *TodoTask { return &t.Tasks[index] }
-
-func (t *TodoList) GetTasks() []TodoTask { return t.Tasks } /*[]Taskable {
-	taskables := make([]Taskable, len(t.Tasks))
-	for i, task := range t.Tasks {
-		taskables[i] = Taskable(task)
+func (t *TodoList) GetTask(index int) *TodoTask {
+	if err := t.Bounds(index); err != nil {
+		return fmt.Errorf("failed to get task: %v\n", err)
 	}
-	return taskables
+	return &t.Tasks[index]
 }
-*/
+
+func (t *TodoList) GetTasks() []TodoTask { return t.Tasks }
 
 // Buffer returns the buffered task.
 func (t *TodoList) Buffer() *TodoTask { return t.buffer }
@@ -52,7 +50,7 @@ func (t *TodoList) SetBuffer(task *TodoTask) { t.buffer = task }
 
 func (t *TodoList) UpdatePriorities(start int) error {
 	if err := t.Bounds(start); err != nil {
-		return fmt.Errorf("Failed to update task priorities: %v\n", err)
+		return fmt.Errorf("failed to update task priorities: %v\n", err)
 	}
 
 	var wg sync.WaitGroup
@@ -81,7 +79,6 @@ func (t *TodoList) Add(task *TodoTask, index int) error {
 		t.Tasks = append(t.Tasks, *task)
 		return nil
 	}
-
 	// Otherwise, insert task at the specified index.
 	t.Tasks = append(t.Tasks[:index+1], t.Tasks[index:]...)
 	t.Tasks[index] = *task
