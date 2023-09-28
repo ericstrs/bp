@@ -33,11 +33,11 @@ func (t *TodoList) GetTitle() string { return t.Title }
 
 func (t *TodoList) SetTitle(s string) { t.Title = s }
 
-func (t *TodoList) GetTask(index int) *TodoTask {
+func (t *TodoList) GetTask(index int) (*TodoTask, error) {
 	if err := t.Bounds(index); err != nil {
-		return fmt.Errorf("failed to get task: %v\n", err)
+		return nil, fmt.Errorf("failed to get task: %v\n", err)
 	}
-	return &t.Tasks[index]
+	return &t.Tasks[index], nil
 }
 
 func (t *TodoList) GetTasks() []TodoTask { return t.Tasks }
