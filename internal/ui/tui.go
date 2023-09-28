@@ -37,21 +37,37 @@ type TUI struct {
 
 type NodeRef struct {
 	ID   int
-	Type string // This could be 'Board', 'Column', 'Task', etc.
+	Type string // This could be 'Board'
 }
 
 // Init intializes the tview app and sets up the UI.
 func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	t.app = tview.NewApplication()
+	t.appInputCapture()
+	// Update left and right panel size before drawing. This won't affect
+	// the current drawing, it sets the panel width variables for the next
+	// draw operation.
+	t.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
+		width, _ := screen.Size()
+		if t.zoomedInPanel {
+			t.leftPanelWidth = width
+			t.rightPanelWidth = width
+			return false
+		}
+		t.leftPanelWidth = int(float64(width)*0.2) - 2
+		t.rightPanelWidth = width - t.leftPanelWidth
+		return false
+	})
+
 	t.taskData = tl
 	t.treeData = tree
-
 	width := 25
-	// Remove two from width to account for panel borders
+	// Remove two from default width to account for panel borders
 	t.leftPanelWidth = width - 2
 
 	t.list = tview.NewTable().
 		SetSelectable(true, false)
+	t.listInputCapture()
 
 	t.board = tview.NewGrid().
 		SetRows(0).
@@ -62,90 +78,7 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	t.tree = tview.NewTreeView().
 		SetRoot(root).
 		SetCurrentNode(root)
-	t.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case 'l':
-			node := t.tree.GetCurrentNode()
-			board, ok := t.getBoardRef(node)
-			if !ok {
-				log.Println("node isnt a board: ", board)
-				return event
-			}
-
-			t.showBoard(board)
-		case 'a': // Add a root board
-			node := t.tree.GetCurrentNode()
-			// If node is the root node, create a new root board.
-			if node.GetLevel() == 0 {
-				form := t.createRootBoardForm()
-				t.showModal(form)
-				return event
-			}
-		case 'e': // Edit root board
-			node := t.tree.GetCurrentNode()
-			// If node is the root node, edit new root board.
-			if node.GetLevel() == 1 {
-				node := t.tree.GetCurrentNode()
-				board, ok := t.getBoardRef(node)
-				if !ok {
-					log.Println("Failed to edit root board: current tree view node isn't of type Board")
-					return event
-				}
-				form := t.editRootBoardForm(board, node)
-				t.showModal(form)
-				return event
-			}
-		case 'd': // Delete a root board
-			node := t.tree.GetCurrentNode()
-			if node.GetLevel() != 1 {
-				return event
-			}
-			board, ok := t.getBoardRef(node)
-			if !ok {
-				log.Println("Failed to remove root board: current tree view node isn't of type Board.")
-				return event
-			}
-
-			// Remove root board
-			b, err := t.treeData.RemoveRoot(board)
-			if err != nil {
-				log.Printf("Failed to remove root board: %v\n", err)
-				return event
-			}
-			// Buffer deleted board
-			t.treeData.BoardBuffer.Clear()
-			t.treeData.BoardBuffer.SetBoardBuffer(b)
-
-			t.removeRefBoard(&b)
-
-			// Update tree view
-			t.updateTree()
-			// Show updated tree view
-			t.showTreeView()
-		case 'p': // Paste buffered root board
-			node := t.tree.GetCurrentNode()
-			if node.GetLevel() != 0 {
-				return event
-			}
-
-			board := t.treeData.BoardBuffer.GetBoardBuffer()
-			cpy, err := board.DeepCopy(nil, t.treeData, t.treeData.BoardBuffer.GetChildBoards())
-			if err != nil {
-				log.Printf("Failed to paste board: %v\n", err)
-				return event
-			}
-
-			// Append root board
-			t.treeData.AddRoot(cpy)
-
-			// Update tree view
-			t.updateTree()
-			// Show updated tree view
-			t.showTreeView()
-		}
-		return event
-	})
-
+	t.treeInputCapture()
 	t.tree.SetSelectedFunc(func(node *tview.TreeNode) {
 		if node.IsExpanded() {
 			node.Collapse()
@@ -185,24 +118,6 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	// Add the main grid to page
 	t.pages = tview.NewPages().
 		AddPage("main", t.mainGrid, true, true)
-
-	// Set input handling
-	t.app.SetInputCapture(t.setupInputCapture())
-
-	// Update left and right panel size before drawing. This won't affect
-	// the current drawing, it sets the panel width variables for the next
-	// draw operation.
-	t.app.SetBeforeDrawFunc(func(screen tcell.Screen) bool {
-		width, _ := screen.Size()
-		if t.zoomedInPanel {
-			t.leftPanelWidth = width
-			t.rightPanelWidth = width
-			return false
-		}
-		t.leftPanelWidth = int(float64(width)*0.2) - 2
-		t.rightPanelWidth = width - t.leftPanelWidth
-		return false
-	})
 
 	if err := t.app.SetRoot(t.pages, true).Run(); err != nil {
 		panic(err)
@@ -507,186 +422,241 @@ func (t *TUI) addBoardToTree(node *tview.TreeNode, board *tasks.Board) {
 	}
 }
 
-// setupInputCapture sets up input capturing for the application.
-func (tui *TUI) setupInputCapture() func(event *tcell.EventKey) *tcell.EventKey {
-	return func(event *tcell.EventKey) *tcell.EventKey {
+func (t *TUI) treeInputCapture() {
+	t.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Rune() {
+		case 'l':
+			node := t.tree.GetCurrentNode()
+			board, ok := t.getBoardRef(node)
+			if !ok {
+				return event
+			}
 
-		// Global input handling
-		if event = tui.globalInputCapture(event); event == nil {
-			// Override the entered input by absorbing the event, stop it from
-			// propogating further.
-			return nil
+			t.showBoard(board)
+		case 'a': // Add a root board
+			node := t.tree.GetCurrentNode()
+			// If node is the root node, create a new root board.
+			if node.GetLevel() == 0 {
+				form := t.createRootBoardForm()
+				t.showModal(form)
+				return event
+			}
+		case 'e': // Edit root board
+			node := t.tree.GetCurrentNode()
+			// If node is the root node, edit new root board.
+			if node.GetLevel() == 1 {
+				node := t.tree.GetCurrentNode()
+				board, ok := t.getBoardRef(node)
+				if !ok {
+					log.Println("Failed to edit root board: current tree view node isn't of type Board")
+					return event
+				}
+				form := t.editRootBoardForm(board, node)
+				t.showModal(form)
+				return event
+			}
+		case 'd': // Delete a root board
+			node := t.tree.GetCurrentNode()
+			if node.GetLevel() != 1 {
+				return event
+			}
+			board, ok := t.getBoardRef(node)
+			if !ok {
+				log.Println("Failed to remove root board: current tree view node isn't of type Board.")
+				return event
+			}
+
+			// Remove root board
+			b, err := t.treeData.RemoveRoot(board)
+			if err != nil {
+				log.Printf("Failed to remove root board: %v\n", err)
+				return event
+			}
+			// Buffer deleted board
+			t.treeData.BoardBuffer.Clear()
+			t.treeData.BoardBuffer.SetBoardBuffer(b)
+
+			t.removeRefBoard(&b)
+
+			// Update tree view
+			t.updateTree()
+			// Show updated tree view
+			t.showTreeView()
+		case 'p': // Paste buffered root board
+			node := t.tree.GetCurrentNode()
+			if node.GetLevel() != 0 {
+				return event
+			}
+
+			board := t.treeData.BoardBuffer.GetBoardBuffer()
+			cpy, err := board.DeepCopy(nil, t.treeData, t.treeData.BoardBuffer.GetChildBoards())
+			if err != nil {
+				log.Printf("Failed to paste board: %v\n", err)
+				return event
+			}
+
+			// Append root board
+			t.treeData.AddRoot(cpy)
+
+			// Update tree view
+			t.updateTree()
+			// Show updated tree view
+			t.showTreeView()
 		}
-
-		// Context-specific input handling
-		switch tui.app.GetFocus() {
-		case tui.list:
-			tui.listInputCapture(event)
-			// TODO: case tui.boards:
-			// TODO: case tui.tree:
-		}
-
 		return event
-	}
+	})
 }
 
-// globalInputCapture captures input interactions across all displayed
+// appInputCapture captures input interactions across all displayed
 // tview primatives.
-func (tui *TUI) globalInputCapture(event *tcell.EventKey) *tcell.EventKey {
-	// If tview primatives for user input are currently focused, ignore
-	// any global input captures. This prevents applicaton side effects.
-	// For example, this allows the user to type "q" in an input field
-	// without quiting the application.
-	switch tui.app.GetFocus().(type) {
-	case *tview.InputField, *tview.DropDown, *tview.Checkbox, *tview.Button:
-		return event
-	}
+func (tui *TUI) appInputCapture() {
+	tui.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		// If tview primatives for user input are currently focused, ignore
+		// any global input captures. This prevents applicaton side effects.
+		// For example, this allows the user to type "q" in an input field
+		// without quiting the application.
+		switch tui.app.GetFocus().(type) {
+		case *tview.InputField, *tview.DropDown, *tview.Checkbox, *tview.Button:
+			return event
+		}
 
-	switch event.Key() {
-	case tcell.KeyRune:
-		switch event.Rune() {
-		case 'q': // Quit the program
-			tui.app.Stop()
-		case 'z': // Toggle panel zoom
-			tui.mainGrid.Clear()
+		switch event.Key() {
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'q': // Quit the program
+				tui.app.Stop()
+			case 'z': // Toggle panel zoom
+				tui.mainGrid.Clear()
+				switch tui.focusedPanel {
+				case tui.leftPanel:
+					if tui.zoomedInPanel {
+						tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
+							AddItem(tui.rightPanel, 0, 1, 1, 1, 0, 0, false)
+						tui.mainGrid.SetColumns(-1, -4)
+					} else {
+						tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true)
+						tui.mainGrid.SetColumns(0)
+					}
+				case tui.rightPanel:
+					if tui.zoomedInPanel {
+						tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
+							AddItem(tui.rightPanel, 0, 1, 1, 1, 0, 0, false)
+						tui.mainGrid.SetColumns(-1, -4)
+					} else {
+						tui.mainGrid.AddItem(tui.rightPanel, 0, 0, 1, 1, 0, 0, true)
+						tui.mainGrid.SetColumns(0)
+					}
+				}
+				tui.zoomedInPanel = !tui.zoomedInPanel
+			}
+		case tcell.KeyTab: // Switch panel focus
 			switch tui.focusedPanel {
-			case tui.leftPanel:
+			case tui.leftPanel: // Switch focus to right panel
 				if tui.zoomedInPanel {
-					tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
-						AddItem(tui.rightPanel, 0, 1, 1, 1, 0, 0, false)
-					tui.mainGrid.SetColumns(-1, -4)
-				} else {
-					tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true)
-					tui.mainGrid.SetColumns(0)
-				}
-			case tui.rightPanel:
-				if tui.zoomedInPanel {
-					tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true).
-						AddItem(tui.rightPanel, 0, 1, 1, 1, 0, 0, false)
-					tui.mainGrid.SetColumns(-1, -4)
-				} else {
+					tui.mainGrid.Clear()
 					tui.mainGrid.AddItem(tui.rightPanel, 0, 0, 1, 1, 0, 0, true)
-					tui.mainGrid.SetColumns(0)
 				}
+				tui.app.SetFocus(tui.rightPanel)
+				tui.focusedPanel = tui.rightPanel
+				tui.list.SetSelectable(false, false)
+				tui.leftPanel.SetBorder(false)
+				tui.rightPanel.SetBorder(true)
+			case tui.rightPanel: // Switch focus to left panel
+				if tui.zoomedInPanel {
+					tui.mainGrid.Clear()
+					tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true)
+				}
+				tui.app.SetFocus(tui.leftPanel)
+				tui.focusedPanel = tui.leftPanel
+				tui.list.SetSelectable(true, false)
+				tui.rightPanel.SetBorder(false)
+				tui.leftPanel.SetBorder(true)
 			}
-			tui.zoomedInPanel = !tui.zoomedInPanel
+			return nil // Override the tab key
 		}
-	case tcell.KeyTab: // Switch panel focus
-		switch tui.focusedPanel {
-		case tui.leftPanel: // Switch focus to right panel
-			if tui.zoomedInPanel {
-				tui.mainGrid.Clear()
-				tui.mainGrid.AddItem(tui.rightPanel, 0, 0, 1, 1, 0, 0, true)
-			}
-			tui.app.SetFocus(tui.rightPanel)
-			tui.focusedPanel = tui.rightPanel
-			tui.list.SetSelectable(false, false)
-			tui.leftPanel.SetBorder(false)
-			tui.rightPanel.SetBorder(true)
-		case tui.rightPanel: // Switch focus to left panel
-			if tui.zoomedInPanel {
-				tui.mainGrid.Clear()
-				tui.mainGrid.AddItem(tui.leftPanel, 0, 0, 1, 1, 0, 0, true)
-			}
-			tui.app.SetFocus(tui.leftPanel)
-			tui.focusedPanel = tui.leftPanel
-			tui.list.SetSelectable(true, false)
-			tui.rightPanel.SetBorder(false)
-			tui.leftPanel.SetBorder(true)
-		}
-		return nil // Override the tab key
-	}
-	return event
+		return event
+	})
 }
 
 // listInputCapture captures input interactions specific to the list.
-func (t *TUI) listInputCapture(event *tcell.EventKey) {
-	t.listBoardInputCapture(event)
+func (t *TUI) listInputCapture() {
+	t.list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		row, _ := t.list.GetSelection()
+		switch event.Key() {
+		case tcell.KeyRune:
+			switch event.Rune() {
+			case 'a': // Create new task
+				form := t.createListForm(t.calcTaskIdx(row, t.leftPanelWidth))
+				t.showModal(form)
+				return event
+			case 'e': // Edit task
+				form := t.editListForm(t.calcTaskIdx(row, t.leftPanelWidth))
+				t.showModal(form)
+			case 'x': // Toggle task completion status
+				currentIdx := t.calcTaskIdx(row, t.leftPanelWidth)
+				task := *t.taskData.GetTask(currentIdx)
 
-	row, _ := t.list.GetSelection()
-	switch event.Key() {
-	case tcell.KeyRune:
-		switch event.Rune() {
-		case 'a': // Create new task
-			form := t.createListForm(t.calcTaskIdx(row, t.leftPanelWidth))
-			t.showModal(form)
-			return
-		case 'e': // Edit task
-			form := t.editListForm(t.calcTaskIdx(row, t.leftPanelWidth))
-			t.showModal(form)
-		case 'x': // Toggle task completion status
-			currentIdx := t.calcTaskIdx(row, t.leftPanelWidth)
-			task := *t.taskData.GetTask(currentIdx)
+				task.SetDone(!task.GetIsDone())
 
-			task.SetDone(!task.GetIsDone())
+				// If the task was toggled to be done,
+				if task.GetIsDone() {
+					// Remove task from the task data slice
+					_, err := t.taskData.Remove(currentIdx)
+					if err != nil {
+						return event
+					}
 
-			// If the task was toggled to be done,
-			if task.GetIsDone() {
-				// Remove task from the task data slice
-				_, err := t.taskData.Remove(currentIdx)
-				if err != nil {
-					return
+					// Append the task to the end of the slice
+					t.taskData.Add(&task, len(t.taskData.GetTasks()))
+					// Update task priorities
+					t.taskData.UpdatePriorities(currentIdx)
 				}
 
-				// Append the task to the end of the slice
-				t.taskData.Add(&task, len(t.taskData.GetTasks()))
+				// TODO: handle toggle start/finish date fields
+				//task.SetFinished(time.Now()) // set done date to current date
+				t.filterAndUpdateList(t.leftPanelWidth)
+			case 'd': // Delete task
+				// Delete task from task data slice
+				task, err := t.taskData.Remove(t.calcTaskIdx(row, t.leftPanelWidth))
+				if err != nil {
+					return event
+				}
+				// Buffer returned deleted task
+				t.taskData.SetBuffer(task)
+
 				// Update task priorities
-				t.taskData.UpdatePriorities(currentIdx)
+				t.taskData.UpdatePriorities(t.calcTaskIdx(row, t.leftPanelWidth))
+
+				// Update tview todo list
+				t.filterAndUpdateList(t.leftPanelWidth)
+			case 'p': // Paste task
+				currentIdx := t.calcTaskIdx(row, t.leftPanelWidth)
+				// Read from buffer
+				task := t.taskData.Buffer()
+
+				// Add task to the todo list
+				t.taskData.Add(task, currentIdx+1)
+
+				// Update task priorities
+				t.taskData.UpdatePriorities(currentIdx + 1)
+
+				// Update tview todo list
+				t.filterAndUpdateList(t.leftPanelWidth)
+			case ' ': // Toggle task description
+				selectedRow, _ := t.list.GetSelection()
+				currentIdx := t.calcTaskIdx(selectedRow, t.leftPanelWidth)
+				// If calculated task index is within bounds, toggle task show
+				// description status, and update rendered list.
+				if err := t.taskData.Bounds(currentIdx); err != nil {
+					return event
+				}
+				task := t.taskData.GetTask(currentIdx)
+				task.ShowDesc = !task.ShowDesc
+				t.filterAndUpdateList(t.leftPanelWidth)
 			}
-
-			// TODO: handle toggle start/finish date fields
-			//task.SetFinished(time.Now()) // set done date to current date
-			t.filterAndUpdateList(t.leftPanelWidth)
-		case 'd': // Delete task
-			// Delete task from task data slice
-			task, err := t.taskData.Remove(t.calcTaskIdx(row, t.leftPanelWidth))
-			if err != nil {
-				return
-			}
-			// Buffer returned deleted task
-			t.taskData.SetBuffer(task)
-
-			// Update task priorities
-			t.taskData.UpdatePriorities(t.calcTaskIdx(row, t.leftPanelWidth))
-
-			// Update tview todo list
-			t.filterAndUpdateList(t.leftPanelWidth)
-		case 'p': // Paste task
-			currentIdx := t.calcTaskIdx(row, t.leftPanelWidth)
-			// Read from buffer
-			task := t.taskData.Buffer()
-
-			// Add task to the todo list
-			t.taskData.Add(task, currentIdx+1)
-
-			// Update task priorities
-			t.taskData.UpdatePriorities(currentIdx + 1)
-
-			// Update tview todo list
-			t.filterAndUpdateList(t.leftPanelWidth)
-		case ' ': // Toggle task description
-			selectedRow, _ := t.list.GetSelection()
-			currentIdx := t.calcTaskIdx(selectedRow, t.leftPanelWidth)
-			// If calculated task index is within bounds, toggle task show
-			// description status, and update rendered list.
-			if err := t.taskData.Bounds(currentIdx); err != nil {
-				return
-			}
-			task := t.taskData.GetTask(currentIdx)
-			task.ShowDesc = !task.ShowDesc
-			t.filterAndUpdateList(t.leftPanelWidth)
 		}
-	}
-}
-
-// listBoardInputCapture captures shared input interactions between
-// the list and kanban boards.
-func (t *TUI) listBoardInputCapture(event *tcell.EventKey) {
-	switch event.Key() {
-	case tcell.KeyRune:
-		switch event.Rune() {
-		}
-	}
+		return event
+	})
 }
 
 // boardInputCapture captures input interactions specific to the
@@ -730,7 +700,7 @@ func (t *TUI) boardInputCapture() {
 					_, ok := t.getBoardRef(parentNode)
 
 					if !ok {
-						log.Println("Failed to enter sub-board: current tree view node isn't of type Board.")
+						//log.Println("Failed to enter sub-board: current tree view node isn't of type Board.")
 						return event
 					}
 
