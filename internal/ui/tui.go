@@ -42,6 +42,39 @@ type NodeRef struct {
 
 // Init intializes the tview app and sets up the UI.
 func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
+	t.taskData = tl
+	t.treeData = tree
+	t.InitApp()
+	t.InitList()
+	t.InitBoard()
+	t.InitTree()
+
+	// Populate tui list and tree view.
+	t.Populate()
+
+	t.InitLeftPanel()
+	t.InitRightPanel()
+	// Initialize panel focus to left panel
+	t.focusedPanel = t.leftPanel
+
+	// Create the main parent grid
+	t.mainGrid = tview.NewGrid().
+		SetRows(0).
+		SetColumns(-1, -4).
+		AddItem(t.leftPanel, 0, 0, 1, 1, 0, 0, true).
+		AddItem(t.rightPanel, 0, 1, 1, 1, 0, 0, false)
+
+	// Add the main grid to page
+	t.pages = tview.NewPages().
+		AddPage("main", t.mainGrid, true, true)
+
+	if err := t.app.SetRoot(t.pages, true).Run(); err != nil {
+		panic(err)
+	}
+}
+
+// InitApp initialzes the application.
+func (t *TUI) InitApp() {
 	t.app = tview.NewApplication()
 	t.appInputCapture()
 	// Update left and right panel size before drawing. This won't affect
@@ -58,22 +91,25 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 		t.rightPanelWidth = width - t.leftPanelWidth
 		return false
 	})
+}
 
-	t.taskData = tl
-	t.treeData = tree
-	width := 25
-	// Remove two from default width to account for panel borders
-	t.leftPanelWidth = width - 2
-
+// InitList initialzes the list.
+func (t *TUI) InitList() {
 	t.list = tview.NewTable().
 		SetSelectable(true, false)
 	t.listInputCapture()
+}
 
+// InitBoard initialzes the board.
+func (t *TUI) InitBoard() {
 	t.board = tview.NewGrid().
 		SetRows(0).
 		SetColumns(0)
 	t.boardInputCapture()
+}
 
+// InitTree initialzes the tree.
+func (t *TUI) InitTree() {
 	root := tview.NewTreeNode("Board Trees")
 	t.tree = tview.NewTreeView().
 		SetRoot(root).
@@ -86,10 +122,13 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 			node.Expand()
 		}
 	})
+}
 
-	// Populate tui list and tree view.
-	t.Populate()
-
+// InitLeftPanel initialzes the left panel.
+func (t *TUI) InitLeftPanel() {
+	width := 25
+	// Remove two from default width to account for panel borders
+	t.leftPanelWidth = width - 2
 	// Create the left-hand side panel
 	t.leftPanel = tview.NewGrid().
 		SetRows(0).
@@ -97,31 +136,16 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 		AddItem(t.list, 0, 0, 1, 1, 0, 0, true)
 	t.leftPanel.SetTitle(t.taskData.GetTitle())
 	t.leftPanel.SetBorder(true)
+}
 
+// InitRightPanel initialzes the right panel.
+func (t *TUI) InitRightPanel() {
 	// Create right-hand side panel
 	t.rightPanel = tview.NewGrid().
 		SetRows(0).
 		SetColumns(0)
 	t.rightPanel.SetBorder(false)
 	t.showTreeView()
-
-	// Create the main parent grid
-	t.mainGrid = tview.NewGrid().
-		SetRows(0).
-		SetColumns(-1, -4).
-		AddItem(t.leftPanel, 0, 0, 1, 1, 0, 0, true).
-		AddItem(t.rightPanel, 0, 1, 1, 1, 0, 0, false)
-
-	// Initialize panel focus to left panel
-	t.focusedPanel = t.leftPanel
-
-	// Add the main grid to page
-	t.pages = tview.NewPages().
-		AddPage("main", t.mainGrid, true, true)
-
-	if err := t.app.SetRoot(t.pages, true).Run(); err != nil {
-		panic(err)
-	}
 }
 
 // showBoard clears the right panel and sets the board.
@@ -131,6 +155,7 @@ func (t *TUI) showBoard(b *tasks.Board) {
 	t.boardColumns = nil // Reset columns
 	t.boardColumnsData = b.GetColumns()
 
+	t.isNoColumnsTableDisplayed = false
 	if len(t.boardColumnsData) == 0 {
 		t.rightPanel.SetTitle("No Columns")
 		noColumnTable := tview.NewTable()
@@ -144,11 +169,10 @@ func (t *TUI) showBoard(b *tasks.Board) {
 		t.isNoColumnsTableDisplayed = true
 		return
 	}
-	t.isNoColumnsTableDisplayed = false
 
 	t.rightPanel.SetTitle(b.GetTitle())
 
-	// Loop over all the columns in the board
+	// Create a table for each column in the board
 	for i := range t.boardColumnsData {
 		table := tview.NewTable().
 			SetSelectable(false, false) // No selection by default
@@ -222,7 +246,7 @@ func (t *TUI) showTreeView() {
 
 // calcTaskIdx returns the calculated task index in a given task slice.
 // This function takes into account whether the description for each
-// task is shown, which would occupy an extra row in the task list
+// task is shown, which would occupy one or more rows in the task list
 // table.
 func (t *TUI) calcTaskIdx(selectedRow, columnWidth int) int {
 	taskIdx := 0
@@ -247,7 +271,7 @@ func (t *TUI) calcTaskIdx(selectedRow, columnWidth int) int {
 
 // calcTaskIdxBoard returns the calculated task index in a given board
 // column. This function takes into account whether the description for each
-// task is shown, which would occupy an extra row in the column table.
+// task is shown, which would occupy one or more rows in the column table.
 func (t *TUI) calcTaskIdxBoard(selectedRow, columnWidth int) int {
 	taskIdx := 0
 
@@ -363,10 +387,9 @@ func (t *TUI) Populate() {
 // updateTree updates the entire tview tree view primitive.
 func (t *TUI) updateTree() {
 	t.tree.GetRoot().ClearChildren()
-
 	rootBoards := t.treeData.GetRootBoards()
 
-	// If there are no root boards,
+	// If there are no root boards, add message node and return
 	if len(rootBoards) == 0 {
 		noBoardsNode := tview.NewTreeNode("No boards available")
 		t.tree.GetRoot().AddChild(noBoardsNode)
@@ -384,6 +407,7 @@ func (t *TUI) updateTree() {
 			SetSelectable(true)
 		t.tree.GetRoot().AddChild(boardNode)
 
+		// Add board's children
 		t.addBoardToTree(boardNode, board)
 	}
 }
@@ -893,7 +917,7 @@ func (t *TUI) pasteBoardCol() {
 	board, ok := t.getBoardRef(node)
 	if !ok {
 		log.Println("Couldn't paste column: current tree view node isn't of type Board.")
-		return event
+		return
 	}
 
 	// Get buffered column
@@ -902,7 +926,7 @@ func (t *TUI) pasteBoardCol() {
 	cpy, err := column.DeepCopy(t.treeData, board, t.treeData.ColBuffer.GetChildBoards())
 	if err != nil {
 		log.Printf("Failed to paste board column: %v\n", err)
-		return event
+		return
 	}
 
 	// Insert column into board
@@ -933,29 +957,29 @@ func (t *TUI) boardTaskInputCapture(event *tcell.EventKey, selectedRow int) *tce
 		}
 		t.showModal(form)
 	case 'd': // delete and buffer board task
-		t.removeBoardTask()
+		t.removeBoardTask(selectedRow)
 	case 'p': // paste board task
-		t.pasteBoardTask()
+		t.pasteBoardTask(selectedRow)
 	case ' ': // Toggle task description
-		t.toggleBoardTaskDesc()
+		t.toggleBoardTaskDesc(selectedRow)
 	}
 	return event
 }
 
 // removeBoardTask deleteds and buffers a board task.
-func (t *TUI) removeBoardTask() {
+func (t *TUI) removeBoardTask(selectedRow int) {
 	node := t.tree.GetCurrentNode()
 	parentBoard, ok := t.getBoardRef(node)
 	if !ok {
 		log.Println("Failed to remove board task: current tree view node isn't of type Board.")
-		return event
+		return
 	}
 
 	// Delete task from focused column
 	taskIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
 	task, err := t.boardColumnsData[t.focusedColumn].Remove(taskIdx)
 	if err != nil {
-		return event
+		return
 	}
 	t.treeData.TaskBuffer.Clear()
 	t.treeData.TaskBuffer.SetTaskBuffer(*task)
@@ -985,13 +1009,13 @@ func (t *TUI) removeBoardTask() {
 }
 
 // pasteBoardTask reads buffered task and pastes it.
-func (t *TUI) pasteBoardTask() {
+func (t *TUI) pasteBoardTask(selectedRow int) {
 	// Get current board
 	node := t.tree.GetCurrentNode()
 	board, ok := t.getBoardRef(node)
 	if !ok {
 		log.Println("Couldn't paste task: current tree view node isn't of type Board.")
-		return event
+		return
 	}
 
 	currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
@@ -1000,13 +1024,13 @@ func (t *TUI) pasteBoardTask() {
 	task := t.treeData.TaskBuffer.GetTaskBuffer()
 	// If this board has no buffered task, return early.
 	if task.Task == nil {
-		return event
+		return
 	}
 
 	cpy, err := task.DeepCopy(t.treeData, board, t.treeData.TaskBuffer.GetChildBoards())
 	if err != nil {
 		log.Printf("Failed to paste board task: %v\n", err)
-		return event
+		return
 	}
 
 	// Add task to the todo list
@@ -1019,13 +1043,13 @@ func (t *TUI) pasteBoardTask() {
 }
 
 // toggleBoardTaskDesc toggles a board task description.
-func (t *TUI) toggleBoardTaskDesc() {
+func (t *TUI) toggleBoardTaskDesc(selectedRow int) {
 	currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
 	// If calculated task index is within bounds, toggle task show
 	// description status, and update rendered list.
 	task, err := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
 	if err != nil {
-		return event
+		return
 	}
 	task.ShowDesc = !task.ShowDesc
 	t.updateColumn(t.focusedColumn)
