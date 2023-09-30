@@ -43,7 +43,7 @@ type Taskable interface {
 	// SetName sets the name of the task.
 	SetName(s string)
 	// Description returns the description of the task.
-	GetDescription() string
+	GetDesc() string
 	// SetDescription sets the description of the task.
 	SetDescription(d string)
 	// GetShowDesc returns the show description status for the task.
@@ -96,7 +96,7 @@ type TaskList interface {
 	// Note: The priority updating of the tasks in the list is assumed to
 	// be handled outside this function, and should be addressed post-add
 	// operation.
-	Add(task *Taskable, index int) error
+	Add(task Taskable, index int) error
 
 	// Remove removes a task from the list by its index and returns the
 	// returned task for buffering.
@@ -112,7 +112,7 @@ type TaskList interface {
 	// Note: The buffering of the removed task and priority updating is
 	// assumed to be handled outside this function, and they should be
 	// addressed post-removal operation.
-	Remove(index int) (*Taskable, error)
+	Remove(index int) (Taskable, error)
 }
 
 // A Task is the representation of a basic task.
@@ -124,7 +124,8 @@ type Task struct {
 	Started     time.Time `yaml:"started"`     // date task was created
 	Finished    time.Time `yaml:"finished"`    // date task was finished
 	Priority    int       `yaml:"priority"`    // Determines task urgency. Lower numbers indicate higher priority.
-	Done        bool      `yaml:"done"`        // used to signify when a task it done
+	// TODO: move to TodoTask struct (?).
+	Done bool `yaml:"done"` // used to signify when a task is done
 }
 
 func (t Task) GetID() int { return t.Id }
@@ -135,7 +136,7 @@ func (t Task) GetName() string { return t.Name }
 
 func (t *Task) SetName(s string) { t.Name = s }
 
-func (t Task) GetDescription() string { return t.Description }
+func (t Task) GetDesc() string { return t.Description }
 
 func (t *Task) SetDescription(d string) { t.Description = d }
 

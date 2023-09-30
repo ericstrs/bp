@@ -7,18 +7,18 @@ import (
 	"sync"
 )
 
-type BoardBuff struct {
-	BoardBuffer Board    `yaml:"board"`
+type BoardBuffer struct {
+	BoardBuff   Board    `yaml:"board"`
 	ChildBoards []*Board `yaml:"child_boards"`
 }
 
-type ColumnBuff struct {
-	ColumnBuffer BoardColumn `yaml:"column"`
-	ChildBoards  []*Board    `yaml:"child_boards"`
+type ColumnBuffer struct {
+	ColumnBuff  BoardColumn `yaml:"column"`
+	ChildBoards []*Board    `yaml:"child_boards"`
 }
 
-type TaskBuff struct {
-	TaskBuffer  BoardTask `yaml:"task"`
+type TaskBuffer struct {
+	TaskBuff    BoardTask `yaml:"task"`
 	ChildBoards []*Board  `yaml:"child_boards"`
 }
 
@@ -27,9 +27,9 @@ type BoardTree struct {
 	ChildBoards    []*Board `yaml:"child_boards"`
 	CurrentBoardID int      `yaml:"-"` //`yaml:"current_board_id"`
 
-	BoardBuffer BoardBuff  `yaml:"board_buffer"`
-	ColBuffer   ColumnBuff `yaml:"column_buffer"`
-	TaskBuffer  TaskBuff   `yaml:"task_buffer"`
+	BoardBuff BoardBuffer  `yaml:"board_buffer"`
+	ColBuff   ColumnBuffer `yaml:"column_buffer"`
+	TaskBuff  TaskBuffer   `yaml:"task_buffer"`
 
 	BoardCounter int `yaml:"board_counter"`
 	TaskCounter  int `yaml:"task_counter"`
@@ -57,17 +57,17 @@ type BoardTask struct {
 
 var _ Taskable = &BoardTask{}
 
-func (bb BoardBuff) GetBoardBuffer() Board { return bb.BoardBuffer }
+func (bb BoardBuffer) GetBoardBuff() Board { return bb.BoardBuff }
 
-func (bb *BoardBuff) SetBoardBuffer(b Board) { bb.BoardBuffer = b }
+func (bb *BoardBuffer) SetBoardBuff(b Board) { bb.BoardBuff = b }
 
-func (bb *BoardBuff) Clear() { bb.ChildBoards = bb.ChildBoards[:0] }
+func (bb *BoardBuffer) Clear() { bb.ChildBoards = bb.ChildBoards[:0] }
 
-func (bb BoardBuff) GetChildBoards() []*Board { return bb.ChildBoards }
+func (bb BoardBuffer) GetChildBoards() []*Board { return bb.ChildBoards }
 
-func (bb *BoardBuff) AddChild(b *Board) { bb.InsertChild(b, -1) }
+func (bb *BoardBuffer) AddChild(b *Board) { bb.InsertChild(b, -1) }
 
-func (bb *BoardBuff) InsertChild(b *Board, index int) {
+func (bb *BoardBuffer) InsertChild(b *Board, index int) {
 	// If index out of range, then append child board to the slice.
 	if index < 0 || index >= len(bb.ChildBoards) {
 		bb.ChildBoards = append(bb.ChildBoards, b)
@@ -78,7 +78,7 @@ func (bb *BoardBuff) InsertChild(b *Board, index int) {
 	bb.ChildBoards[index] = b
 }
 
-func (bb *BoardBuff) RemoveChild(b *Board) (Board, error) {
+func (bb *BoardBuffer) RemoveChild(b *Board) (Board, error) {
 	// Loop through all child boards to find the match.
 	for idx, board := range bb.ChildBoards {
 		// Using pointer equality for comparison
@@ -96,17 +96,17 @@ func (bb *BoardBuff) RemoveChild(b *Board) (Board, error) {
 	return Board{}, fmt.Errorf("child board with id %d not found", b.ID)
 }
 
-func (cb ColumnBuff) GetColumnBuffer() BoardColumn { return cb.ColumnBuffer }
+func (cb ColumnBuffer) GetColumnBuff() BoardColumn { return cb.ColumnBuff }
 
-func (cb *ColumnBuff) SetColumnBuffer(b BoardColumn) { cb.ColumnBuffer = b }
+func (cb *ColumnBuffer) SetColumnBuff(b BoardColumn) { cb.ColumnBuff = b }
 
-func (cb *ColumnBuff) Clear() { cb.ChildBoards = cb.ChildBoards[:0] }
+func (cb *ColumnBuffer) Clear() { cb.ChildBoards = cb.ChildBoards[:0] }
 
-func (cb ColumnBuff) GetChildBoards() []*Board { return cb.ChildBoards }
+func (cb ColumnBuffer) GetChildBoards() []*Board { return cb.ChildBoards }
 
-func (cb *ColumnBuff) AddChild(b *Board) { cb.InsertChild(b, -1) }
+func (cb *ColumnBuffer) AddChild(b *Board) { cb.InsertChild(b, -1) }
 
-func (cb *ColumnBuff) InsertChild(b *Board, index int) {
+func (cb *ColumnBuffer) InsertChild(b *Board, index int) {
 	// If index out of range, then append child board to the slice.
 	if index < 0 || index >= len(cb.ChildBoards) {
 		cb.ChildBoards = append(cb.ChildBoards, b)
@@ -117,7 +117,7 @@ func (cb *ColumnBuff) InsertChild(b *Board, index int) {
 	cb.ChildBoards[index] = b
 }
 
-func (cb *ColumnBuff) RemoveChild(b *Board) (Board, error) {
+func (cb *ColumnBuffer) RemoveChild(b *Board) (Board, error) {
 	// Loop through all child boards to find the match.
 	for idx, board := range cb.ChildBoards {
 		// Using pointer equality for comparison
@@ -135,17 +135,17 @@ func (cb *ColumnBuff) RemoveChild(b *Board) (Board, error) {
 	return Board{}, fmt.Errorf("child board with id %d not found", b.ID)
 }
 
-func (tb TaskBuff) GetTaskBuffer() BoardTask { return tb.TaskBuffer }
+func (tb TaskBuffer) GetTaskBuff() BoardTask { return tb.TaskBuff }
 
-func (tb *TaskBuff) SetTaskBuffer(b BoardTask) { tb.TaskBuffer = b }
+func (tb *TaskBuffer) SetTaskBuff(b BoardTask) { tb.TaskBuff = b }
 
-func (tb *TaskBuff) Clear() { tb.ChildBoards = tb.ChildBoards[:0] }
+func (tb *TaskBuffer) Clear() { tb.ChildBoards = tb.ChildBoards[:0] }
 
-func (tb TaskBuff) GetChildBoards() []*Board { return tb.ChildBoards }
+func (tb TaskBuffer) GetChildBoards() []*Board { return tb.ChildBoards }
 
-func (tb *TaskBuff) AddChild(b *Board) { tb.InsertChild(b, -1) }
+func (tb *TaskBuffer) AddChild(b *Board) { tb.InsertChild(b, -1) }
 
-func (tb *TaskBuff) InsertChild(b *Board, index int) {
+func (tb *TaskBuffer) InsertChild(b *Board, index int) {
 	// If index out of range, then append child board to the slice.
 	if index < 0 || index >= len(tb.ChildBoards) {
 		tb.ChildBoards = append(tb.ChildBoards, b)
@@ -156,7 +156,7 @@ func (tb *TaskBuff) InsertChild(b *Board, index int) {
 	tb.ChildBoards[index] = b
 }
 
-func (tb *TaskBuff) RemoveChild(b *Board) (Board, error) {
+func (tb *TaskBuffer) RemoveChild(b *Board) (Board, error) {
 	// Loop through all child boards to find the match.
 	for idx, board := range tb.ChildBoards {
 		// Using pointer equality for comparison
@@ -178,9 +178,9 @@ func (tree BoardTree) GetRootBoards() []*Board { return tree.RootBoards }
 
 func (tree BoardTree) GetChildBoards() []*Board { return tree.ChildBoards }
 
-// GetBoardByID finds and returns a board. This function first searches
+// GetBoard finds and returns a board. This function first searches
 // through child board and then root boards.
-func (tree *BoardTree) GetBoardByID(id int) (*Board, error) {
+func (tree *BoardTree) GetBoard(id int) (*Board, error) {
 	for _, board := range tree.ChildBoards {
 		if board.ID == id {
 			return board, nil

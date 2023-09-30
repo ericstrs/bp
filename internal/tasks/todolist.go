@@ -45,8 +45,8 @@ func (t *TodoList) GetTasks() []TodoTask { return t.Tasks }
 // Buffer returns the buffered task.
 func (t *TodoList) Buffer() *TodoTask { return t.buffer }
 
-// SetBuffer sets the buffered task.
-func (t *TodoList) SetBuffer(task *TodoTask) { t.buffer = task }
+// SetBuff sets the buffered task.
+func (t *TodoList) SetBuff(task *TodoTask) { t.buffer = task }
 
 func (t *TodoList) UpdatePriorities(start int) error {
 	if err := t.Bounds(start); err != nil {

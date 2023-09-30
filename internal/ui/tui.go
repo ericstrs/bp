@@ -2,6 +2,7 @@ package ui
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -26,13 +27,13 @@ type TUI struct {
 	list     *tview.Table
 	taskData *tasks.TodoList
 
-	tree                      *tview.TreeView
-	treeData                  *tasks.BoardTree
-	board                     *tview.Grid
-	boardColumns              []*tview.Table
-	boardColumnsData          []tasks.BoardColumn
-	focusedColumn             int
-	isNoColumnsTableDisplayed bool
+	tree          *tview.TreeView
+	treeData      *tasks.BoardTree
+	board         *tview.Grid
+	boardCols     []*tview.Table
+	boardColsData []tasks.BoardColumn
+	focusedCol    int
+	isEmptyTable  bool
 }
 
 type NodeRef struct {
@@ -152,33 +153,33 @@ func (t *TUI) InitRightPanel() {
 func (t *TUI) showBoard(b *tasks.Board) {
 	t.rightPanel.Clear()
 	t.board.Clear()
-	t.boardColumns = nil // Reset columns
-	t.boardColumnsData = b.GetColumns()
+	t.boardCols = nil // Reset columns
+	t.boardColsData = b.GetColumns()
 
-	t.isNoColumnsTableDisplayed = false
-	if len(t.boardColumnsData) == 0 {
+	t.isEmptyTable = false
+	if len(t.boardColsData) == 0 {
 		t.rightPanel.SetTitle("No Columns")
-		noColumnTable := tview.NewTable()
+		noColTable := tview.NewTable()
 		cell := tview.NewTableCell("This board has no columns.")
 
-		noColumnTable.SetCell(0, 0, cell)
+		noColTable.SetCell(0, 0, cell)
 
-		t.board.AddItem(noColumnTable, 0, 0, 1, 1, 0, 0, false)
+		t.board.AddItem(noColTable, 0, 0, 1, 1, 0, 0, false)
 		t.rightPanel.AddItem(t.board, 0, 0, 1, 1, 0, 0, true)
 		t.app.SetFocus(t.rightPanel)
-		t.isNoColumnsTableDisplayed = true
+		t.isEmptyTable = true
 		return
 	}
 
 	t.rightPanel.SetTitle(b.GetTitle())
 
 	// Create a table for each column in the board
-	for i := range t.boardColumnsData {
+	for i := range t.boardColsData {
 		table := tview.NewTable().
 			SetSelectable(false, false) // No selection by default
 		table.SetBorder(true)
 
-		t.boardColumns = append(t.boardColumns, table)
+		t.boardCols = append(t.boardCols, table)
 		t.updateColumn(i)
 		t.board.AddItem(table, 0, i, 1, 1, 0, 0, true)
 	}
@@ -189,39 +190,42 @@ func (t *TUI) showBoard(b *tasks.Board) {
 
 	// Assert focus on the right panel. This is needed for board input
 	// capture to work.
-	t.app.SetFocus(t.boardColumns[0])
-	t.focusedColumn = 0
+	t.app.SetFocus(t.boardCols[0])
+	t.focusedCol = 0
 }
 
 // updateColumn clears the focused column of the board and updates the
 // focused column's contents.
 func (t *TUI) updateColumn(colIdx int) {
-	t.boardColumns[colIdx].Clear()
-	t.boardColumns[colIdx].SetTitle(t.boardColumnsData[colIdx].GetTitle())
+	col := &t.boardColsData[colIdx]
+	table := t.boardCols[colIdx]
 
-	if len(t.boardColumnsData[colIdx].GetTasks()) == 0 {
-		t.boardColumns[colIdx].SetCellSimple(0, 0, "No tasks available")
+	table.Clear()
+	table.SetTitle(col.GetTitle())
+
+	if len(col.GetTasks()) == 0 {
+		table.SetCellSimple(0, 0, "No tasks available")
 		return
 	}
 
 	currentRow := 0
-	for _, task := range t.boardColumnsData[colIdx].GetTasks() {
+	for _, task := range col.GetTasks() {
 		task := task
 		prefix := ""
 		if task.GetHasChild() {
 			prefix = "# "
 		}
 		name := prefix + task.GetName()
-		t.boardColumns[colIdx].SetCellSimple(currentRow, 0, name)
+		table.SetCellSimple(currentRow, 0, name)
 
 		// If task show description status is set to true, add the task
 		// description to the list.
 		if task.GetShowDesc() {
-			lineWidth := (t.rightPanelWidth / len(t.boardColumnsData)) - 4
-			wrappedDesc := WordWrap(task.Description, lineWidth)
+			lineWidth := (t.rightPanelWidth / len(t.boardColsData)) - 4
+			wrappedDesc := WordWrap(task.GetDesc(), lineWidth)
 			for _, line := range wrappedDesc {
 				currentRow++
-				t.boardColumns[colIdx].SetCell(currentRow, 0, tview.NewTableCell(line).
+				table.SetCell(currentRow, 0, tview.NewTableCell(line).
 					SetAlign(tview.AlignLeft).
 					SetSelectable(false).
 					SetTextColor(tcell.ColorYellow))
@@ -248,11 +252,11 @@ func (t *TUI) showTreeView() {
 // This function takes into account whether the description for each
 // task is shown, which would occupy one or more rows in the task list
 // table.
-func (t *TUI) calcTaskIdx(selectedRow, columnWidth int) int {
+func (t *TUI) calcTaskIdx(row, colWidth int) int {
 	taskIdx := 0
 
 	// Iterate through each row up to the selected row
-	for i := 0; i < selectedRow; i++ {
+	for i := 0; i < row; i++ {
 		task, err := t.taskData.GetTask(taskIdx)
 		if err != nil {
 			log.Printf("Failed to calculate list task index: %v\n", err)
@@ -261,8 +265,8 @@ func (t *TUI) calcTaskIdx(selectedRow, columnWidth int) int {
 
 		// If the task description is being shown, skip the next row
 		if task.GetShowDesc() {
-			wrappedDesc := WordWrap(task.GetDescription(), columnWidth)
-			i += len(wrappedDesc) // Skip the row(s) meant for task description
+			wd := WordWrap(task.GetDesc(), colWidth)
+			i += len(wd) // Skip the row(s) meant for task description
 		}
 		taskIdx++
 	}
@@ -272,12 +276,12 @@ func (t *TUI) calcTaskIdx(selectedRow, columnWidth int) int {
 // calcTaskIdxBoard returns the calculated task index in a given board
 // column. This function takes into account whether the description for each
 // task is shown, which would occupy one or more rows in the column table.
-func (t *TUI) calcTaskIdxBoard(selectedRow, columnWidth int) int {
+func (t *TUI) calcTaskIdxBoard(row, colWidth int) int {
 	taskIdx := 0
 
 	// Iterate through each row up to the selected row
-	for i := 0; i < selectedRow; i++ {
-		task, err := t.boardColumnsData[t.focusedColumn].GetTask(taskIdx)
+	for i := 0; i < row; i++ {
+		task, err := t.boardColsData[t.focusedCol].GetTask(taskIdx)
 		if err != nil {
 			log.Printf("Failed to calculate board task index: %v\n", err)
 			return taskIdx
@@ -285,8 +289,8 @@ func (t *TUI) calcTaskIdxBoard(selectedRow, columnWidth int) int {
 
 		// If the task description is being shown, skip the next row
 		if task.GetShowDesc() {
-			wrappedDesc := WordWrap(task.GetDescription(), columnWidth)
-			i += len(wrappedDesc) // Skip the row(s) meant for task description
+			wd := WordWrap(task.GetDesc(), colWidth)
+			i += len(wd) // Skip the row(s) meant for task description
 		}
 		taskIdx++
 	}
@@ -300,7 +304,7 @@ func (t *TUI) calcTaskIdxBoard(selectedRow, columnWidth int) int {
 // always return to the first item in the list. This would be desired
 // when the functionality for moving completed tasks to the end of the
 // list is implemented.
-func (t *TUI) filterAndUpdateList(columnWidth int) {
+func (t *TUI) filterAndUpdateList(colWidth int) {
 	t.list.Clear()
 
 	if len(t.taskData.GetTasks()) == 0 {
@@ -323,8 +327,8 @@ func (t *TUI) filterAndUpdateList(columnWidth int) {
 		// If task show description status is set to true, add the task
 		// description to the list.
 		if task.GetShowDesc() {
-			wrappedDesc := WordWrap(task.Description, columnWidth)
-			for _, line := range wrappedDesc {
+			wd := WordWrap(task.Description, colWidth)
+			for _, line := range wd {
 				currentRow++
 				t.list.SetCell(currentRow, 0, tview.NewTableCell(line).
 					SetAlign(tview.AlignLeft).
@@ -411,22 +415,21 @@ func (t *TUI) updateTree() {
 	}
 }
 
-// addBoardToTree recursively adds a given board and all its children to the tree
-// view.
-func (t *TUI) addBoardToTree(node *tview.TreeNode, board *tasks.Board) {
-	columns := board.GetColumns()
+// addBoardToTree recursively adds a given board and all its children
+// to the tree view.
+func (t *TUI) addBoardToTree(n *tview.TreeNode, b *tasks.Board) {
+	columns := b.GetColumns()
 	for i := range columns {
 		columnNode := tview.NewTreeNode(columns[i].GetTitle()).
 			SetReference(&columns[i]).
 			SetSelectable(true)
-		node.AddChild(columnNode)
+		n.AddChild(columnNode)
 
 		tasks := columns[i].GetTasks()
 		for i := range tasks {
 			task := tasks[i]
 			if task.GetHasChild() {
-				id := task.GetChildID()
-				childBoard, err := t.treeData.GetBoardByID(id)
+				childBoard, err := t.treeData.GetBoard(task.GetChildID())
 				if err != nil {
 					log.Println("Failed to populate tree view:", err)
 					return
@@ -534,30 +537,35 @@ func (t *TUI) switchPanel() {
 func (t *TUI) listInputCapture() {
 	t.list.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		row, _ := t.list.GetSelection()
+		idx := t.calcTaskIdx(row, t.leftPanelWidth)
 		switch event.Key() {
 		case tcell.KeyRune:
 			switch event.Rune() {
 			case 'a': // create new task
-				form := t.createListForm(t.calcTaskIdx(row, t.leftPanelWidth))
+				form := t.createListForm(idx)
 				t.showModal(form)
 				return event
 			case 'e': // edit task
-				form := t.editListForm(t.calcTaskIdx(row, t.leftPanelWidth))
+				form, err := t.editListForm(idx)
+				if err != nil {
+					log.Printf("failed to edit list: %v\n", err)
+					return event
+				}
 				t.showModal(form)
 			case 'x': // toggle task completion status
-				err := t.toggleTaskDone(t.calcTaskIdx(row, t.leftPanelWidth))
+				err := t.toggleTaskDone(idx)
 				if err != nil {
 					return event
 				}
 			case 'd': // delete task
-				err := t.deleteListTask(t.calcTaskIdx(row, t.leftPanelWidth))
+				err := t.deleteListTask(idx)
 				if err != nil {
 					return event
 				}
 			case 'p': // paste task
-				t.pasteListTask(t.calcTaskIdx(row, t.leftPanelWidth))
+				t.pasteListTask(idx)
 			case ' ': // toggle task description
-				err := t.toggleTaskDesc(t.calcTaskIdx(row, t.leftPanelWidth))
+				err := t.toggleTaskDesc(idx)
 				if err != nil {
 					return event
 				}
@@ -569,8 +577,8 @@ func (t *TUI) listInputCapture() {
 
 // toggleTaskDone toggles a tasks completion status. Toggling a task
 // from done to start does not restart the start date.
-func (t *TUI) toggleTaskDone(taskIdx int) error {
-	tk, err := t.taskData.GetTask(taskIdx)
+func (t *TUI) toggleTaskDone(idx int) error {
+	tk, err := t.taskData.GetTask(idx)
 	if err != nil {
 		return err
 	}
@@ -578,12 +586,12 @@ func (t *TUI) toggleTaskDone(taskIdx int) error {
 	task.SetDone(!task.GetIsDone())
 	// If task toggled to done, remove task from task slice
 	if task.GetIsDone() {
-		if _, err := t.taskData.Remove(taskIdx); err != nil {
+		if _, err := t.taskData.Remove(idx); err != nil {
 			return err
 		}
 		// Append task to end of slice and update task priorities
 		t.taskData.Add(&task, len(t.taskData.GetTasks()))
-		t.taskData.UpdatePriorities(taskIdx)
+		t.taskData.UpdatePriorities(idx)
 		task.SetFinished(time.Now()) // update done date
 	}
 	t.filterAndUpdateList(t.leftPanelWidth)
@@ -591,28 +599,28 @@ func (t *TUI) toggleTaskDone(taskIdx int) error {
 }
 
 // deleteListTask deletes and buffers a task from the list.
-func (t *TUI) deleteListTask(taskIdx int) error {
-	task, err := t.taskData.Remove(taskIdx)
+func (t *TUI) deleteListTask(idx int) error {
+	task, err := t.taskData.Remove(idx)
 	if err != nil {
 		return err
 	}
-	t.taskData.SetBuffer(task)
-	t.taskData.UpdatePriorities(taskIdx)
+	t.taskData.SetBuff(task)
+	t.taskData.UpdatePriorities(idx)
 	t.filterAndUpdateList(t.leftPanelWidth)
 	return nil
 }
 
 // pasteListTask pastes buffered list task.
-func (t *TUI) pasteListTask(currentIdx int) {
+func (t *TUI) pasteListTask(idx int) {
 	task := t.taskData.Buffer()
-	t.taskData.Add(task, currentIdx+1)
-	t.taskData.UpdatePriorities(currentIdx + 1)
+	t.taskData.Add(task, idx+1)
+	t.taskData.UpdatePriorities(idx + 1)
 	t.filterAndUpdateList(t.leftPanelWidth)
 }
 
 // toggleTaskDesc toggles a list task description.
-func (t *TUI) toggleTaskDesc(taskIdx int) error {
-	task, err := t.taskData.GetTask(taskIdx)
+func (t *TUI) toggleTaskDesc(idx int) error {
+	task, err := t.taskData.GetTask(idx)
 	if err != nil {
 		return err
 	}
@@ -621,8 +629,8 @@ func (t *TUI) toggleTaskDesc(taskIdx int) error {
 	return nil
 }
 
-// treeInputCapture captures input interactions specific to the
-// tree view.
+// treeInputCapture captures input interactions specific to the tree
+// view.
 func (t *TUI) treeInputCapture() {
 	t.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
@@ -676,8 +684,8 @@ func (t *TUI) deleteRootBoard() {
 		return
 	}
 	// Buffer deleted board
-	t.treeData.BoardBuffer.Clear()
-	t.treeData.BoardBuffer.SetBoardBuffer(b)
+	t.treeData.BoardBuff.Clear()
+	t.treeData.BoardBuff.SetBoardBuff(b)
 
 	// Remove root board's children
 	t.removeRefBoard(&b)
@@ -694,8 +702,8 @@ func (t *TUI) pasteRootBoard() {
 		return
 	}
 
-	board := t.treeData.BoardBuffer.GetBoardBuffer()
-	cpy, err := board.DeepCopy(nil, t.treeData, t.treeData.BoardBuffer.GetChildBoards())
+	board := t.treeData.BoardBuff.GetBoardBuff()
+	cpy, err := board.DeepCopy(nil, t.treeData, t.treeData.BoardBuff.GetChildBoards())
 	if err != nil {
 		log.Printf("Failed to paste board: %v\n", err)
 		return
@@ -714,12 +722,12 @@ func (t *TUI) pasteRootBoard() {
 func (t *TUI) boardInputCapture() {
 	t.board.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// Input capture for the no columns table
-		if t.isNoColumnsTableDisplayed {
+		if t.isEmptyTable {
 			switch event.Rune() {
 			case 'h': // go back to tree navigation
 				t.showTreeView()
 			case 'a': // add a new column
-				form, err := t.createColumnForm(t.focusedColumn)
+				form, err := t.createColForm(t.focusedCol)
 				if err != nil {
 					log.Println("Failed to add a column to the board: ", err)
 					return event
@@ -729,51 +737,52 @@ func (t *TUI) boardInputCapture() {
 			return event
 		}
 
-		isFocusedOnTable := false
-		if rows, cols := t.boardColumns[t.focusedColumn].GetSelectable(); rows == false && cols == false {
-			isFocusedOnTable = true
+		focusedOnTable := false
+		rows, cols := t.boardCols[t.focusedCol].GetSelectable()
+		if rows == false && cols == false {
+			focusedOnTable = true
 		}
-		selectedRow, _ := t.boardColumns[t.focusedColumn].GetSelection()
+		row, _ := t.boardCols[t.focusedCol].GetSelection()
 
 		if event.Rune() == 'L' || event.Key() == tcell.KeyEnter {
-			t.enterSubBoard(isFocusedOnTable, selectedRow)
+			t.enterSubBoard(focusedOnTable, row)
 		}
 
 		switch event.Rune() {
 		case 'l': // move right
-			if t.focusedColumn < len(t.boardColumns)-1 {
-				t.boardColumns[t.focusedColumn].SetSelectable(false, false)
-				t.focusedColumn++
-				t.boardColumns[t.focusedColumn].SetSelectable(true, false)
+			if t.focusedCol < len(t.boardCols)-1 {
+				t.boardCols[t.focusedCol].SetSelectable(false, false)
+				t.focusedCol++
+				t.boardCols[t.focusedCol].SetSelectable(true, false)
 
-				if isFocusedOnTable {
-					t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+				if focusedOnTable {
+					t.boardCols[t.focusedCol].SetSelectable(false, false)
 				}
-				t.app.SetFocus(t.boardColumns[t.focusedColumn])
+				t.app.SetFocus(t.boardCols[t.focusedCol])
 			}
 		case 'h': // move left
 			// If at the first column, switch back to TreeView
-			if t.focusedColumn == 0 {
-				t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+			if t.focusedCol == 0 {
+				t.boardCols[t.focusedCol].SetSelectable(false, false)
 				t.showTreeView()
 				return event
 			}
 
-			t.boardColumns[t.focusedColumn].SetSelectable(false, false)
-			t.focusedColumn--
-			t.boardColumns[t.focusedColumn].SetSelectable(true, false)
+			t.boardCols[t.focusedCol].SetSelectable(false, false)
+			t.focusedCol--
+			t.boardCols[t.focusedCol].SetSelectable(true, false)
 
-			if isFocusedOnTable {
-				t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+			if focusedOnTable {
+				t.boardCols[t.focusedCol].SetSelectable(false, false)
 			}
-			t.app.SetFocus(t.boardColumns[t.focusedColumn])
+			t.app.SetFocus(t.boardCols[t.focusedCol])
 		}
 
-		switch isFocusedOnTable {
+		switch focusedOnTable {
 		case true:
-			t.boardColInputCapture(event, selectedRow)
+			t.boardColInputCapture(event)
 		case false:
-			t.boardTaskInputCapture(event, selectedRow)
+			t.boardTaskInputCapture(event, row)
 		}
 
 		return event
@@ -781,13 +790,13 @@ func (t *TUI) boardInputCapture() {
 }
 
 // enterSubBoard enters a sub board.
-func (t *TUI) enterSubBoard(isFocusedOnTable bool, selectedRow int) {
+func (t *TUI) enterSubBoard(focusedOnTable bool, row int) {
 	// Ensure focus is on a task
-	if isFocusedOnTable {
+	if focusedOnTable {
 		return
 	}
-
-	task, err := t.boardColumnsData[t.focusedColumn].GetTask(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+	col := &t.boardColsData[t.focusedCol]
+	task, err := col.GetTask(t.calcTaskIdxBoard(row, t.rightPanelWidth))
 	if err != nil {
 		log.Printf("Failed to enter sub-board: %v\n", err)
 		return
@@ -797,29 +806,28 @@ func (t *TUI) enterSubBoard(isFocusedOnTable bool, selectedRow int) {
 	if task.GetHasChild() {
 		parentNode := t.tree.GetCurrentNode()
 		if _, ok := t.getBoardRef(parentNode); !ok {
-			//log.Println("Failed to enter sub-board: current tree view node isn't of type Board.")
 			return
 		}
 
-		id := task.GetChildID()
-		childBoard, err := t.treeData.GetBoardByID(id)
+		childBoard, err := t.treeData.GetBoard(task.GetChildID())
 		if err != nil {
 			log.Println("Failed to enter sub-board: ", err)
 			return
 		}
+
 		// Find tree view node that references focused board column
 		for _, node := range parentNode.GetChildren() {
-			column, ok := getColumnRef(node)
+			c, ok := getColRef(node)
 			if !ok {
-				log.Println("Failed to enter sub-board: board child tree view node isn't of type Column.")
+				log.Println("Failed to enter sub-board: tree view node isn't of type Column.")
 				return
 			}
-			if column == &t.boardColumnsData[t.focusedColumn] {
+			if c == col {
 				// Find tree view node that references focused board task
 				for _, n := range node.GetChildren() {
 					board, ok := t.getBoardRef(n)
 					if !ok {
-						log.Println("Failed to enter sub-board: found tree view node isn't of type Board.")
+						log.Println("Failed to enter sub-board: tree view node isn't of type Board.")
 						return
 					}
 					if board == childBoard {
@@ -835,29 +843,29 @@ func (t *TUI) enterSubBoard(isFocusedOnTable bool, selectedRow int) {
 
 // boardColInputCapture captures input interactions specific to the
 // currently focused board column.
-func (t *TUI) boardColInputCapture(event *tcell.EventKey, selectedRow int) *tcell.EventKey {
-	switch event.Rune() {
+func (t *TUI) boardColInputCapture(e *tcell.EventKey) *tcell.EventKey {
+	switch e.Rune() {
 	case 'j': // move down
 		// Enable task selection
-		t.boardColumns[t.focusedColumn].SetSelectable(true, false)
+		t.boardCols[t.focusedCol].SetSelectable(true, false)
 	case 'a':
 		// If focus is on the entire table, create a new board column to
 		// the right of the currently focused column.
-		form, err := t.createColumnForm(t.focusedColumn)
+		form, err := t.createColForm(t.focusedCol)
 		if err != nil {
 			log.Println("Failed to add a column to the board: ", err)
-			return event
+			return e
 		}
 		t.showModal(form)
 	case 'e': // edit board column
-		form := t.editColumnForm()
+		form := t.editColForm()
 		t.showModal(form)
 	case 'd': // Delete and buffer board column
 		t.removeBoardCol()
 	case 'p': // Paste board column
 		t.pasteBoardCol()
 	}
-	return event
+	return e
 }
 
 // removeBoardCol deletes and buffers a board column. This includes the
@@ -870,22 +878,22 @@ func (t *TUI) removeBoardCol() {
 		log.Println("Failed to remove board column: current tree view node isn't of type Board.")
 		return
 	}
-	t.treeData.ColBuffer.Clear()
+	t.treeData.ColBuff.Clear()
 
 	// If a task in the column references a board, remove that board from
 	// child board slice. Buffer the task and board and its chilren.
-	for _, task := range t.boardColumnsData[t.focusedColumn].GetTasks() {
+	for _, task := range t.boardColsData[t.focusedCol].GetTasks() {
 		if task.GetHasChild() {
-			t.removeRefColumn(task, parentBoard)
+			t.removeRefCol(task, parentBoard)
 		}
 	}
 
-	column, err := parentBoard.RemoveColumn(t.focusedColumn)
+	col, err := parentBoard.RemoveColumn(t.focusedCol)
 	if err != nil {
 		log.Printf("Failed to remove board column: %v\n", err)
 		return
 	}
-	t.treeData.ColBuffer.SetColumnBuffer(column)
+	t.treeData.ColBuff.SetColumnBuff(col)
 
 	// Update and show board
 	t.showBoard(parentBoard)
@@ -902,16 +910,16 @@ func (t *TUI) pasteBoardCol() {
 	}
 
 	// Get buffered column
-	column := t.treeData.ColBuffer.GetColumnBuffer()
+	column := t.treeData.ColBuff.GetColumnBuff()
 
-	cpy, err := column.DeepCopy(t.treeData, board, t.treeData.ColBuffer.GetChildBoards())
+	cpy, err := column.DeepCopy(t.treeData, board, t.treeData.ColBuff.GetChildBoards())
 	if err != nil {
 		log.Printf("Failed to paste board column: %v\n", err)
 		return
 	}
 
 	// Insert column into board
-	board.InsertColumn(cpy, t.focusedColumn+1)
+	board.InsertColumn(cpy, t.focusedCol+1)
 
 	// Update board and tree view
 	t.showBoard(board)
@@ -920,51 +928,52 @@ func (t *TUI) pasteBoardCol() {
 
 // boardTaskInputCapture captures input interactions specific to the
 // current board task.
-func (t *TUI) boardTaskInputCapture(event *tcell.EventKey, selectedRow int) *tcell.EventKey {
-	switch event.Rune() {
+func (t *TUI) boardTaskInputCapture(e *tcell.EventKey, row int) *tcell.EventKey {
+	switch e.Rune() {
 	case 'k': // move up
-		if selectedRow == 0 {
+		if row == 0 {
 			// Disable task selection
-			t.boardColumns[t.focusedColumn].SetSelectable(false, false)
+			t.boardCols[t.focusedCol].SetSelectable(false, false)
 		}
 	case 'a': // add board task underneath current task
-		form := t.createBoardTaskForm(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+		form := t.createBoardTaskForm(t.calcTaskIdxBoard(row, t.rightPanelWidth))
 		t.showModal(form)
 	case 'e': // edit board tasks
-		form, err := t.editBoardTaskForm(t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth))
+		form, err := t.editBoardTaskForm(t.calcTaskIdxBoard(row, t.rightPanelWidth))
 		if err != nil {
 			log.Printf("Failed to edit board task: %v\n", err)
-			return event
+			return e
 		}
 		t.showModal(form)
 	case 'd': // delete and buffer board task
-		t.removeBoardTask(selectedRow)
+		t.removeBoardTask(row)
 	case 'p': // paste board task
-		t.pasteBoardTask(selectedRow)
+		t.pasteBoardTask(row)
 	case ' ': // Toggle task description
-		t.toggleBoardTaskDesc(selectedRow)
+		t.toggleBoardTaskDesc(row)
 	}
-	return event
+	return e
 }
 
 // removeBoardTask deletes and buffers a board task.
-func (t *TUI) removeBoardTask(selectedRow int) {
+func (t *TUI) removeBoardTask(row int) {
 	node := t.tree.GetCurrentNode()
 	parentBoard, ok := t.getBoardRef(node)
 	if !ok {
 		log.Println("Failed to remove board task: current tree view node isn't of type Board.")
 		return
 	}
+	col := &t.boardColsData[t.focusedCol]
 
 	// Delete task from focused column
-	taskIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
-	task, err := t.boardColumnsData[t.focusedColumn].Remove(taskIdx)
+	idx := t.calcTaskIdxBoard(row, t.rightPanelWidth)
+	task, err := col.Remove(idx)
 	if err != nil {
 		log.Printf("Failed to remove and buffer task: %v\n", err)
 		return
 	}
-	t.treeData.TaskBuffer.Clear()
-	t.treeData.TaskBuffer.SetTaskBuffer(*task)
+	t.treeData.TaskBuff.Clear()
+	t.treeData.TaskBuff.SetTaskBuff(*task)
 
 	// If task being deleted references a board, from it from child
 	// boards slice. Buffer the task and board and its children.
@@ -973,13 +982,13 @@ func (t *TUI) removeBoardTask(selectedRow int) {
 	}
 
 	// Update the focused column and tree view
-	t.boardColumnsData[t.focusedColumn].UpdatePriorities(taskIdx)
-	t.updateColumn(t.focusedColumn)
+	col.UpdatePriorities(idx)
+	t.updateColumn(t.focusedCol)
 	t.updateTree()
 }
 
 // pasteBoardTask reads buffered task and pastes it.
-func (t *TUI) pasteBoardTask(selectedRow int) {
+func (t *TUI) pasteBoardTask(row int) {
 	// Get current board
 	node := t.tree.GetCurrentNode()
 	board, ok := t.getBoardRef(node)
@@ -988,62 +997,59 @@ func (t *TUI) pasteBoardTask(selectedRow int) {
 		return
 	}
 
-	currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
+	idx := t.calcTaskIdxBoard(row, t.rightPanelWidth)
 
 	// Read from buffer
-	task := t.treeData.TaskBuffer.GetTaskBuffer()
+	task := t.treeData.TaskBuff.GetTaskBuff()
 	// If this board has no buffered task, return early.
 	if task.Task == nil {
 		return
 	}
 
-	cpy, err := task.DeepCopy(t.treeData, board, t.treeData.TaskBuffer.GetChildBoards())
+	cpy, err := task.DeepCopy(t.treeData, board, t.treeData.TaskBuff.GetChildBoards())
 	if err != nil {
 		log.Printf("Failed to paste board task: %v\n", err)
 		return
 	}
 
-	// Add task to the todo list
-	t.boardColumnsData[t.focusedColumn].InsertTask(&cpy, currentIdx+1)
-
-	// Update the focused column and tree view
-	t.boardColumnsData[t.focusedColumn].UpdatePriorities(currentIdx)
-	t.updateColumn(t.focusedColumn)
+	col := &t.boardColsData[t.focusedCol]
+	col.InsertTask(&cpy, idx+1)
+	col.UpdatePriorities(idx)
+	t.updateColumn(t.focusedCol)
 	t.updateTree()
 }
 
 // toggleBoardTaskDesc toggles a board task description.
-func (t *TUI) toggleBoardTaskDesc(selectedRow int) {
-	currentIdx := t.calcTaskIdxBoard(selectedRow, t.rightPanelWidth)
+func (t *TUI) toggleBoardTaskDesc(row int) {
+	idx := t.calcTaskIdxBoard(row, t.rightPanelWidth)
 	// If calculated task index is within bounds, toggle task show
 	// description status, and update rendered list.
-	task, err := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
+	task, err := t.boardColsData[t.focusedCol].GetTask(idx)
 	if err != nil {
 		return
 	}
 	task.ShowDesc = !task.ShowDesc
-	t.updateColumn(t.focusedColumn)
+	t.updateColumn(t.focusedCol)
 }
 
 // removeRefBoard moves a given board and all its children from the main
 // list of boards to a buffer board list.
 func (t *TUI) removeRefBoard(b *tasks.Board) {
 	for _, id := range b.GetChildren() {
-		board, err := t.treeData.GetBoardByID(id)
+		board, err := t.treeData.GetBoard(id)
 		if err != nil {
 			log.Printf("Failed to buffer a referenced child board: %v\n", err)
 			continue
 		}
-		t.treeData.BoardBuffer.AddChild(board)
+		t.treeData.BoardBuff.AddChild(board)
 		t.treeData.RemoveChildBoard(board)
 		t.removeRefBoard(board) // remove child board's children
 	}
 }
 
-// removeRefColumn removes a board referenced by a given task in a
-// column.
-func (t *TUI) removeRefColumn(task tasks.BoardTask, parentBoard *tasks.Board) {
-	board, err := t.treeData.GetBoardByID(task.GetChildID())
+// removeRefCol removes a board referenced by a given task in a column.
+func (t *TUI) removeRefCol(task tasks.BoardTask, parentBoard *tasks.Board) {
+	board, err := t.treeData.GetBoard(task.GetChildID())
 	if err != nil {
 		log.Printf("Failed to buffer a referenced board in the column: %v\n", err)
 		return
@@ -1053,7 +1059,7 @@ func (t *TUI) removeRefColumn(task tasks.BoardTask, parentBoard *tasks.Board) {
 		log.Printf("Failed to remove and buffer child board: %v\n", err)
 		return
 	}
-	t.treeData.ColBuffer.AddChild(board)
+	t.treeData.ColBuff.AddChild(board)
 
 	// Sever connection from parent board and referenced child board.
 	// Note: Connection from task to child board must not be severed to
@@ -1067,16 +1073,16 @@ func (t *TUI) removeRefColumn(task tasks.BoardTask, parentBoard *tasks.Board) {
 	t.removeBoardRefCol(board)
 }
 
-// removeBoardRefCol recursively buffers and removes a boards children. The
-// board is referenced by a board task in a given board column.
+// removeBoardRefCol recursively buffers and removes a boards children.
+// The board is referenced by a board task in a given board column.
 func (t *TUI) removeBoardRefCol(b *tasks.Board) {
 	for _, id := range b.GetChildren() {
-		board, err := t.treeData.GetBoardByID(id)
+		board, err := t.treeData.GetBoard(id)
 		if err != nil {
 			log.Printf("Failed to buffer a referenced child board: %v\n", err)
 			continue
 		}
-		t.treeData.ColBuffer.AddChild(board)
+		t.treeData.ColBuff.AddChild(board)
 		t.treeData.RemoveChildBoard(board)
 		t.removeBoardRefCol(board) // remove child board's children
 	}
@@ -1084,7 +1090,7 @@ func (t *TUI) removeBoardRefCol(b *tasks.Board) {
 
 // removeRefTask removes a board referenced by a given task.
 func (t *TUI) removeRefTask(task *tasks.BoardTask, parentBoard *tasks.Board) {
-	board, err := t.treeData.GetBoardByID(task.GetChildID())
+	board, err := t.treeData.GetBoard(task.GetChildID())
 	if err != nil {
 		log.Printf("Failed to buffer referenced board: %v\n", err)
 		return
@@ -1096,7 +1102,7 @@ func (t *TUI) removeRefTask(task *tasks.BoardTask, parentBoard *tasks.Board) {
 		log.Printf("Failed to remove and buffer child board: %v\n", err)
 		return
 	}
-	t.treeData.TaskBuffer.AddChild(board)
+	t.treeData.TaskBuff.AddChild(board)
 
 	// Sever connection from parent board and child board.
 	// Note: Connection from task to child board must not be severed to
@@ -1106,16 +1112,16 @@ func (t *TUI) removeRefTask(task *tasks.BoardTask, parentBoard *tasks.Board) {
 	t.removeBoardRefTask(board)
 }
 
-// removeBoardRefTask recursively buffers and removes a boards children. The
-// board is referenced by a board task.
+// removeBoardRefTask recursively buffers and removes a boards children.
+// The board is referenced by a board task.
 func (t *TUI) removeBoardRefTask(b *tasks.Board) {
 	for _, id := range b.GetChildren() {
-		board, err := t.treeData.GetBoardByID(id)
+		board, err := t.treeData.GetBoard(id)
 		if err != nil {
 			log.Printf("Failed to buffer a referenced child board: %v\n", err)
 			continue
 		}
-		t.treeData.TaskBuffer.AddChild(board)
+		t.treeData.TaskBuff.AddChild(board)
 		t.treeData.RemoveChildBoard(board)
 		t.removeBoardRefTask(board) // remove child board's children
 	}
@@ -1139,7 +1145,7 @@ func (t *TUI) showModal(form *tview.Form) {
 
 // createListForm creates and returns a tview form for creating a new
 // todo list task.
-func (t *TUI) createListForm(currentIdx int) *tview.Form {
+func (t *TUI) createListForm(idx int) *tview.Form {
 	var name, description string
 	var isCore bool
 
@@ -1165,10 +1171,10 @@ func (t *TUI) createListForm(currentIdx int) *tview.Form {
 		task.SetName(name)
 		task.SetDescription(description)
 		task.SetCore(isCore)
-		task.SetPriority(currentIdx + 1)
-		task.SetID(currentIdx + 1)
-		t.taskData.Add(task, currentIdx+1)
-		t.taskData.UpdatePriorities(currentIdx + 1)
+		task.SetPriority(idx + 1)
+		task.SetID(idx + 1)
+		t.taskData.Add(task, idx+1)
+		t.taskData.UpdatePriorities(idx + 1)
 
 		// Update tview list
 		t.filterAndUpdateList(t.leftPanelWidth)
@@ -1222,10 +1228,10 @@ func (t *TUI) createRootBoardForm() *tview.Form {
 
 }
 
-// createColumnForm creates and returns a tview form for creating a
+// createColForm creates and returns a tview form for creating a
 // new board column.
 // This function assumes that a task is currently selected.
-func (t *TUI) createColumnForm(focusedColumn int) (*tview.Form, error) {
+func (t *TUI) createColForm(focusedCol int) (*tview.Form, error) {
 	var name string
 
 	form := tview.NewForm()
@@ -1249,7 +1255,7 @@ func (t *TUI) createColumnForm(focusedColumn int) (*tview.Form, error) {
 		column.SetTitle(name)
 
 		// Insert new column
-		board.InsertColumn(*column, t.focusedColumn+1)
+		board.InsertColumn(*column, t.focusedCol+1)
 
 		t.showBoard(board)
 
@@ -1257,13 +1263,13 @@ func (t *TUI) createColumnForm(focusedColumn int) (*tview.Form, error) {
 		t.updateTree()
 
 		t.closeModal()
-		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+		t.app.SetFocus(t.boardCols[t.focusedCol])
 	})
 
 	form.AddButton("Cancel", func() {
 		// Close the modal without doing anything
 		t.closeModal()
-		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+		t.app.SetFocus(t.boardCols[t.focusedCol])
 	})
 
 	return form, nil
@@ -1272,7 +1278,7 @@ func (t *TUI) createColumnForm(focusedColumn int) (*tview.Form, error) {
 // createBoardTaskForm creates and returns a tview form for creating a
 // new board task.
 // This function assumes that a task is currently selected.
-func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
+func (t *TUI) createBoardTaskForm(idx int) *tview.Form {
 	var name, description string
 	var createChildBoard bool
 
@@ -1294,7 +1300,7 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 		// Add task to task data slice
 		task := new(tasks.BoardTask)
 		task.SetTask(new(tasks.Task))
-		task.SetPriority(currentIdx + 1)
+		task.SetPriority(idx + 1)
 		t.treeData.IncrementTaskCtr()
 		task.SetID(t.treeData.GetTaskCtr())
 		task.SetStarted(time.Now())
@@ -1307,24 +1313,25 @@ func (t *TUI) createBoardTaskForm(currentIdx int) *tview.Form {
 			}
 		}
 
-		t.boardColumnsData[t.focusedColumn].InsertTask(task, currentIdx+1)
-		t.boardColumnsData[t.focusedColumn].UpdatePriorities(currentIdx)
+		col := &t.boardColsData[t.focusedCol]
+		col.InsertTask(task, idx+1)
+		col.UpdatePriorities(idx)
 
 		// Update the column to show the newly added task
-		t.updateColumn(t.focusedColumn)
+		t.updateColumn(t.focusedCol)
 
 		// Update tree view to include the newly added task and its
 		// child if created.
 		t.updateTree()
 
 		t.closeModal()
-		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+		t.app.SetFocus(t.boardCols[t.focusedCol])
 	})
 
 	form.AddButton("Cancel", func() {
 		// Close the modal without doing anything
 		t.closeModal()
-		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+		t.app.SetFocus(t.boardCols[t.focusedCol])
 	})
 
 	return form
@@ -1347,12 +1354,13 @@ func (t *TUI) createAndAddChildBoard(name string, parentTask *tasks.BoardTask) e
 
 // editListForm creates and returns a tview form for editing a
 // todo list task.
-func (t *TUI) editListForm(currentIdx int) *tview.Form {
-
-	tasks := t.taskData.GetTasks()
-	task := &tasks[currentIdx]
+func (t *TUI) editListForm(idx int) (*tview.Form, error) {
+	task, err := t.taskData.GetTask(idx)
+	if err != nil {
+		return nil, err
+	}
 	name := task.GetName()
-	description := task.GetDescription()
+	description := task.GetDesc()
 	isCore := task.GetIsCore()
 
 	form := tview.NewForm()
@@ -1364,7 +1372,7 @@ func (t *TUI) editListForm(currentIdx int) *tview.Form {
 	form.AddInputField("Name", task.GetName(), 20, nil, func(text string) {
 		name = text
 	})
-	form.AddInputField("Description", task.GetDescription(), 50, nil, func(text string) {
+	form.AddInputField("Description", task.GetDesc(), 50, nil, func(text string) {
 		description = text
 	})
 	form.AddCheckbox("Is Core Task", task.GetIsCore(), func(checked bool) {
@@ -1390,7 +1398,7 @@ func (t *TUI) editListForm(currentIdx int) *tview.Form {
 		t.app.SetFocus(t.leftPanel)
 	})
 
-	return form
+	return form, nil
 }
 
 // editRootBoardForm creates and returns a tview form for editing a
@@ -1425,11 +1433,11 @@ func (t *TUI) editRootBoardForm(board *tasks.Board, node *tview.TreeNode) *tview
 	return form
 }
 
-// editColumnForm creates and returns a tview form for editing a
+// editColForm creates and returns a tview form for editing a
 // board column.
-func (t *TUI) editColumnForm() *tview.Form {
-	column := &t.boardColumnsData[t.focusedColumn]
-	name := column.GetTitle()
+func (t *TUI) editColForm() *tview.Form {
+	col := &t.boardColsData[t.focusedCol]
+	name := col.GetTitle()
 
 	form := tview.NewForm()
 	form.SetBorder(true)
@@ -1443,21 +1451,21 @@ func (t *TUI) editColumnForm() *tview.Form {
 
 	form.AddButton("Save", func() {
 		// Update task in data slice
-		column.SetTitle(name)
+		col.SetTitle(name)
 
 		// Update tview list
-		t.updateColumn(t.focusedColumn)
+		t.updateColumn(t.focusedCol)
 
 		t.updateTree()
 
 		t.closeModal()
-		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+		t.app.SetFocus(t.boardCols[t.focusedCol])
 	})
 
 	form.AddButton("Cancel", func() {
 		// Close the modal without doing anything
 		t.closeModal()
-		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+		t.app.SetFocus(t.boardCols[t.focusedCol])
 	})
 
 	return form
@@ -1465,14 +1473,14 @@ func (t *TUI) editColumnForm() *tview.Form {
 
 // editBoardTaskForm creates and returns a tview form for editing a
 // todo list task.
-func (t *TUI) editBoardTaskForm(currentIdx int) (*tview.Form, error) {
+func (t *TUI) editBoardTaskForm(idx int) (*tview.Form, error) {
 	var createChildBoard bool
-	task, err := t.boardColumnsData[t.focusedColumn].GetTask(currentIdx)
+	task, err := t.boardColsData[t.focusedCol].GetTask(idx)
 	if err != nil {
 		return nil, err
 	}
 	name := task.GetName()
-	description := task.GetDescription()
+	desc := task.GetDesc()
 
 	form := tview.NewForm()
 	form.SetBorder(true)
@@ -1483,8 +1491,8 @@ func (t *TUI) editBoardTaskForm(currentIdx int) (*tview.Form, error) {
 	form.AddInputField("Name", name, 20, nil, func(text string) {
 		name = text
 	})
-	form.AddInputField("Description", description, 50, nil, func(text string) {
-		description = text
+	form.AddInputField("Description", desc, 50, nil, func(text string) {
+		desc = text
 	})
 
 	if !task.GetHasChild() {
@@ -1496,15 +1504,14 @@ func (t *TUI) editBoardTaskForm(currentIdx int) (*tview.Form, error) {
 	form.AddButton("Save", func() {
 		task.SetName(name)
 		if task.GetHasChild() {
-			id := task.GetChildID()
-			childBoard, err := t.treeData.GetBoardByID(id)
+			childBoard, err := t.treeData.GetBoard(task.GetChildID())
 			if err != nil {
 				log.Printf("Failed to create and add child board for %q task: %v\n", err)
 				return
 			}
 			childBoard.SetTitle(name)
 		}
-		task.SetDescription(description)
+		task.SetDescription(desc)
 
 		if createChildBoard {
 			if err := t.createAndAddChildBoard(name, task); err != nil {
@@ -1514,18 +1521,18 @@ func (t *TUI) editBoardTaskForm(currentIdx int) (*tview.Form, error) {
 		}
 
 		// Update tview list
-		t.updateColumn(t.focusedColumn)
+		t.updateColumn(t.focusedCol)
 
 		t.updateTree()
 
 		t.closeModal()
-		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+		t.app.SetFocus(t.boardCols[t.focusedCol])
 	})
 
 	form.AddButton("Cancel", func() {
 		// Close the modal without doing anything
 		t.closeModal()
-		t.app.SetFocus(t.boardColumns[t.focusedColumn])
+		t.app.SetFocus(t.boardCols[t.focusedCol])
 	})
 
 	return form, nil
@@ -1546,7 +1553,7 @@ func (t *TUI) getBoardRef(n *tview.TreeNode) (*tasks.Board, bool) {
 		return nil, false
 	}
 
-	board, err := t.treeData.GetBoardByID(nr.ID)
+	board, err := t.treeData.GetBoard(nr.ID)
 	if err != nil {
 		log.Println("Failed to get board reference: ", err)
 		return nil, false
@@ -1554,8 +1561,8 @@ func (t *TUI) getBoardRef(n *tview.TreeNode) (*tasks.Board, bool) {
 	return board, true
 }
 
-// getColumnRef returns the board column referenced by a TreeNode.
-func getColumnRef(n *tview.TreeNode) (*tasks.BoardColumn, bool) {
+// getColRef returns the board column referenced by a TreeNode.
+func getColRef(n *tview.TreeNode) (*tasks.BoardColumn, bool) {
 	if column, ok := n.GetReference().(*tasks.BoardColumn); ok {
 		return column, true
 	}
@@ -1592,4 +1599,57 @@ func severConnection(parentTask *tasks.BoardTask, parentBoard, board *tasks.Boar
 	parentTask.SetHasChild(false)
 
 	parentBoard.RemoveChild(board.GetID())
+}
+
+func InitForm() {
+	app := tview.NewApplication()
+	form := tview.NewForm()
+
+	form.AddInputField("Task Title", "", 20, nil, nil).
+		AddInputField("Task Description", "", 20, nil, nil).
+		AddInputField("Expected Output", "", 20, nil, nil).
+		AddTextArea("Constraints", "", 40, 0, 0, nil).
+		AddInputField("Additional Information", "", 20, nil, nil)
+
+	// Add button to submit form
+	form.AddButton("Submit", func() {
+
+		taskTitle := form.GetFormItem(0).(*tview.InputField).GetText()
+		taskDescription := form.GetFormItem(1).(*tview.InputField).GetText()
+		expectedOutput := form.GetFormItem(2).(*tview.InputField).GetText()
+		constraints := form.GetFormItem(3).(*tview.TextArea).GetText()
+		additionalInfo := form.GetFormItem(4).(*tview.InputField).GetText()
+
+		app.Stop()
+
+		// Print the form details
+		fmt.Printf("# Task Breakdown Request\n\n")
+		fmt.Printf("Task Title: %s\n\n", taskTitle)
+		fmt.Printf("Task Description: %s\n\n", taskDescription)
+		fmt.Printf("Expected Output: %s\n\n", expectedOutput)
+		fmt.Printf("Additional Information: %s\n\n", additionalInfo)
+		fmt.Printf("Constraints:\n%s\n\n", constraints)
+		fmt.Println("Please provide a detailed breakdown of this task into main tasks, sub-tasks, and if possible, even further sub-tasks. Also, identify any dependencies or priority considerations.")
+	})
+
+	// Add a button to cancel form and go back to the previous view
+	form.AddButton("Cancel", func() {
+		// Close form and stop the application
+		app.Stop()
+	})
+
+	// Handle keyboard shortcuts
+	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
+		switch event.Rune() {
+		case 'q':
+			// Quit the application when 'q' is pressed
+			app.Stop()
+			return nil
+		}
+		return event
+	})
+
+	if err := app.SetRoot(form, true).Run(); err != nil {
+		panic(err)
+	}
 }
