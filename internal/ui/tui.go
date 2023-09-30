@@ -12,6 +12,10 @@ import (
 	"github.com/rivo/tview"
 )
 
+const (
+	borderWidth = 2 // Boarder width is about two cells
+)
+
 type TUI struct {
 	app      *tview.Application
 	pages    *tview.Pages
@@ -88,7 +92,7 @@ func (t *TUI) InitApp() {
 			t.rightPanelWidth = width
 			return false
 		}
-		t.leftPanelWidth = int(float64(width)*0.2) - 2
+		t.leftPanelWidth = int(float64(width)*0.2) - borderWidth
 		t.rightPanelWidth = width - t.leftPanelWidth
 		return false
 	})
@@ -129,7 +133,7 @@ func (t *TUI) InitTree() {
 func (t *TUI) InitLeftPanel() {
 	width := 25
 	// Remove two from default width to account for panel borders
-	t.leftPanelWidth = width - 2
+	t.leftPanelWidth = width - borderWidth
 	// Create the left-hand side panel
 	t.leftPanel = tview.NewGrid().
 		SetRows(0).
