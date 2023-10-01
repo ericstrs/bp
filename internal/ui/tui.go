@@ -1310,6 +1310,7 @@ func (t *TUI) createBoardTaskForm(idx int) *tview.Form {
 		task.SetStarted(time.Now())
 		task.SetName(name)
 		task.SetDesc(description)
+		task.SetChildID(-1)
 
 		if createChildBoard {
 			if err := t.createAndAddChildBoard(name, task); err != nil {
@@ -1640,17 +1641,6 @@ func InitForm() {
 	form.AddButton("Cancel", func() {
 		// Close form and stop the application
 		app.Stop()
-	})
-
-	// Handle keyboard shortcuts
-	form.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
-		switch event.Rune() {
-		case 'q':
-			// Quit the application when 'q' is pressed
-			app.Stop()
-			return nil
-		}
-		return event
 	})
 
 	if err := app.SetRoot(form, true).Run(); err != nil {
