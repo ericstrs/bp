@@ -10,8 +10,6 @@ type TodoTask struct {
 	IsCore bool `yaml:"isCore"` // Indicates if this task is a "core" task, meaning it recurs daily
 }
 
-var _ Taskable = &TodoTask{} // Compile-time check for interface satisfaction.
-
 type TodoList struct {
 	Title  string     `yaml:"title"`
 	Tasks  []TodoTask `yaml:"tasks"`
@@ -29,10 +27,13 @@ func (task *TodoTask) GetIsCore() bool { return task.IsCore }
 // SetCore sets whether or not a task is a "core" task.
 func (task *TodoTask) SetCore(b bool) { task.IsCore = b }
 
+// GetTitle returns the title of the todo list.
 func (t *TodoList) GetTitle() string { return t.Title }
 
+// SetTitle sets the title of the todo list.
 func (t *TodoList) SetTitle(s string) { t.Title = s }
 
+// GetTask returns the task at the given index.
 func (t *TodoList) GetTask(index int) (*TodoTask, error) {
 	if err := t.Bounds(index); err != nil {
 		return nil, fmt.Errorf("failed to get task: %v\n", err)
@@ -40,6 +41,7 @@ func (t *TodoList) GetTask(index int) (*TodoTask, error) {
 	return &t.Tasks[index], nil
 }
 
+// GetTasks returns the list of tasks.
 func (t *TodoList) GetTasks() []TodoTask { return t.Tasks }
 
 // Buffer returns the buffered task.
@@ -48,6 +50,8 @@ func (t *TodoList) Buffer() *TodoTask { return t.buffer }
 // SetBuff sets the buffered task.
 func (t *TodoList) SetBuff(task *TodoTask) { t.buffer = task }
 
+// UpdatePriorities updates the priorities of tasks from the given
+// start index.
 func (t *TodoList) UpdatePriorities(start int) error {
 	if err := t.Bounds(start); err != nil {
 		return fmt.Errorf("failed to update task priorities: %v\n", err)
@@ -73,6 +77,18 @@ func (t *TodoList) UpdatePriorities(start int) error {
 	return nil
 }
 
+// Add adds a task to the todo list at the given index.
+//
+// Important Considerations:
+//
+//  1. Update Priority: The removal of a task can affect the
+//     priorities of the remaining tasks. Calling [UpdatePriorities]
+//     post-removal should be done to update task priorities
+//     accordingly.
+//
+// Note: The priority updating of the tasks in the list is assumed to
+// be handled outside this function, and should be addressed post-add
+// operation.
 func (t *TodoList) Add(task *TodoTask, index int) error {
 	// If index is out of range, then append task to the slice.
 	if err := t.Bounds(index); err != nil {
@@ -86,6 +102,20 @@ func (t *TodoList) Add(task *TodoTask, index int) error {
 	return nil
 }
 
+// Remove removes a task from the todo list by its index and returns the
+// removed task for buffering.
+//
+// Important Considerations:
+//
+//  1. Buffering. This function returns the removed task, which should
+//     be buffered.
+//  2. Update Priority: The removal of a task can affect the
+//     priorities of the remaining tasks. Calling a sort function
+//     post-removal should be done to update task priorities accordingly.
+//
+// Note: The buffering of the removed task and priority updating is
+// assumed to be handled outside this function, and they should be
+// addressed post-removal operation.
 func (t *TodoList) Remove(index int) (*TodoTask, error) {
 	// Ensure index is in the correct range.
 	if err := t.Bounds(index); err != nil {
@@ -101,6 +131,7 @@ func (t *TodoList) Remove(index int) (*TodoTask, error) {
 	return &cpy, nil
 }
 
+// Bounds checks if an index is within range.
 func (t *TodoList) Bounds(index int) error {
 	if index < 0 || index >= len(t.Tasks) {
 		return fmt.Errorf("index %d out of range.", index)

@@ -1173,7 +1173,7 @@ func (t *TUI) createListForm(idx int) *tview.Form {
 		task.SetTask(new(tasks.Task))
 		task.SetStarted(time.Now())
 		task.SetName(name)
-		task.SetDescription(description)
+		task.SetDesc(description)
 		task.SetCore(isCore)
 		task.SetPriority(idx + 1)
 		task.SetID(idx + 1)
@@ -1309,7 +1309,7 @@ func (t *TUI) createBoardTaskForm(idx int) *tview.Form {
 		task.SetID(t.treeData.GetTaskCtr())
 		task.SetStarted(time.Now())
 		task.SetName(name)
-		task.SetDescription(description)
+		task.SetDesc(description)
 
 		if createChildBoard {
 			if err := t.createAndAddChildBoard(name, task); err != nil {
@@ -1386,7 +1386,7 @@ func (t *TUI) editListForm(idx int) (*tview.Form, error) {
 	form.AddButton("Save", func() {
 		// Update task in data slice
 		task.SetName(name)
-		task.SetDescription(description)
+		task.SetDesc(description)
 		task.SetCore(isCore)
 
 		// Update tview list
@@ -1515,7 +1515,7 @@ func (t *TUI) editBoardTaskForm(idx int) (*tview.Form, error) {
 			}
 			childBoard.SetTitle(name)
 		}
-		task.SetDescription(desc)
+		task.SetDesc(desc)
 
 		if createChildBoard {
 			if err := t.createAndAddChildBoard(name, task); err != nil {

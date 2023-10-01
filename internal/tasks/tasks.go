@@ -32,89 +32,6 @@ package tasks
 
 import "time"
 
-// The Taskable type describes the methods a task must implement.
-type Taskable interface {
-	// ID returns the unique identifier of the task.
-	GetID() int
-	// SetID sets the unique identifier of the task.
-	SetID(id int)
-	// Name returns the name of the task.
-	GetName() string
-	// SetName sets the name of the task.
-	SetName(s string)
-	// Description returns the description of the task.
-	GetDesc() string
-	// SetDescription sets the description of the task.
-	SetDescription(d string)
-	// GetShowDesc returns the show description status for the task.
-	GetShowDesc() bool
-	// SetShowDesc sets the show description status for the task.
-	SetShowDesc(b bool)
-	// DoneDate returns the date when the task was last finished.
-	GetFinished() time.Time
-	// SetFinished sets the date when the task was last finished.
-	SetFinished(d time.Time)
-	// Started returns the date when the task was last started.
-	GetStarted() time.Time
-	// SetStarted sets the date when the task was last started.
-	SetStarted(d time.Time)
-	// Priority returns the priority of the task.
-	GetPriority() int
-	// SetPriority sets the priority of the task.
-	SetPriority(p int)
-	// IsDone returns whether or not the task is finished.
-	GetIsDone() bool
-	// SetDone sets the task "finished" status to true.
-	SetDone(b bool)
-}
-
-// A Tasktlist represents a list of tasks.
-type TaskList interface {
-	// Title returns the title of the task list.
-	GetTitle() string
-	// SetTitle sets the title of the task list.
-	SetTitle(s string)
-	// GetTask return the task at the given index.
-	GetTask(index int) Taskable
-	// Tasks returns the list of tasks.
-	GetTasks() []Taskable
-	// Bounds check if an index is within range.
-	Bounds(index int) error
-	// UpdatePriorities updates the priorities of tasks from the given
-	// start index.
-	UpdatePriorities(start int) error
-
-	// Add adds a task to the list at a given index.
-	//
-	// Important Considerations:
-	//
-	//	1. Update Priority: The removal of a task can affect the
-	//     priorities of the remaining tasks. Calling [UpdatePriorities]
-	//     post-removal should be done to update task priorities
-	//     accordingly.
-	//
-	// Note: The priority updating of the tasks in the list is assumed to
-	// be handled outside this function, and should be addressed post-add
-	// operation.
-	Add(task Taskable, index int) error
-
-	// Remove removes a task from the list by its index and returns the
-	// returned task for buffering.
-	//
-	// Important Considerations:
-	//
-	//  1. Buffering. This function returns the removed task, which should
-	//     be buffered for potential future reinsertion.
-	//  2. Update Priority: The removal of a task can affect the
-	//     priorities of the remaining tasks. Calling [Sort] post-removal
-	//     should be done to update task priorities accordingly.
-	//
-	// Note: The buffering of the removed task and priority updating is
-	// assumed to be handled outside this function, and they should be
-	// addressed post-removal operation.
-	Remove(index int) (Taskable, error)
-}
-
 // A Task is the representation of a basic task.
 type Task struct {
 	Id          int       `yaml:"id"`          // unique identifier
@@ -128,34 +45,50 @@ type Task struct {
 	Done bool `yaml:"done"` // used to signify when a task is done
 }
 
+// ID returns the unique identifier of the task.
 func (t Task) GetID() int { return t.Id }
 
+// SetID sets the unique identifier of the task.
 func (t *Task) SetID(id int) { t.Id = id }
 
+// GetName returns the name of the task.
 func (t Task) GetName() string { return t.Name }
 
+// SetName sets the name of the task.
 func (t *Task) SetName(s string) { t.Name = s }
 
+// GetDesc returns the description of the task.
 func (t Task) GetDesc() string { return t.Description }
 
-func (t *Task) SetDescription(d string) { t.Description = d }
+// SetDesc sets the description of the task.
+func (t *Task) SetDesc(d string) { t.Description = d }
 
+// GetShowDesc returns the show description status for the task.
 func (t *Task) GetShowDesc() bool { return t.ShowDesc }
 
+// SetShowDesc sets the show description status for the task.
 func (t *Task) SetShowDesc(b bool) { t.ShowDesc = b }
 
+// GetFinished returns the date when the task was last finished.
 func (t Task) GetFinished() time.Time { return t.Finished }
 
+// SetFinished sets the date when the task was last finished.
 func (t *Task) SetFinished(d time.Time) { t.Finished = d }
 
+// GetStarted returns the date when the task was last started.
 func (t Task) GetStarted() time.Time { return t.Started }
 
+// SetStarted sets the date when the task was last started.
 func (t *Task) SetStarted(d time.Time) { t.Started = d }
 
+// GetPriority returns the priority of the task.
 func (t Task) GetPriority() int { return t.Priority }
 
+// SetPriority sets the priority of the task.
 func (t *Task) SetPriority(p int) { t.Priority = p }
 
+// GetIsDone returns whether or not the task is finished.
 func (t Task) GetIsDone() bool { return t.Done }
 
+// SetDone sets the task "finished" status to true.
 func (t *Task) SetDone(b bool) { t.Done = b }

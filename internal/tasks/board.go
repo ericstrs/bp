@@ -55,8 +55,6 @@ type BoardTask struct {
 	HasChild bool `yaml:"has_child"`
 }
 
-var _ Taskable = &BoardTask{}
-
 func (bb BoardBuffer) GetBoardBuff() Board { return bb.BoardBuff }
 
 func (bb *BoardBuffer) SetBoardBuff(b Board) { bb.BoardBuff = b }
@@ -453,10 +451,13 @@ func (b *Board) RemoveChild(id int) error {
 	return errors.New("child board not found")
 }
 
+// GetTitle returns the title of the column.
 func (bc BoardColumn) GetTitle() string { return bc.Title }
 
+// SetTitle sets the title of the column.
 func (bc *BoardColumn) SetTitle(t string) { bc.Title = t }
 
+// GetTask returns the task at the given index.
 func (bc BoardColumn) GetTask(index int) (*BoardTask, error) {
 	// Ensure index is in the correct range.
 	if err := bc.Bounds(index); err != nil {
@@ -465,8 +466,11 @@ func (bc BoardColumn) GetTask(index int) (*BoardTask, error) {
 	return &bc.Tasks[index], nil
 }
 
+// GetTasks returns the list of tasks.
 func (bc BoardColumn) GetTasks() []BoardTask { return bc.Tasks }
 
+// UpdatePriorities updates the priorities of tasks from the given
+// start index.
 func (bc *BoardColumn) UpdatePriorities(start int) error {
 	if err := bc.Bounds(start); err != nil {
 		return fmt.Errorf("Failed to update task priorities: %v\n", err)
@@ -492,6 +496,18 @@ func (bc *BoardColumn) UpdatePriorities(start int) error {
 	return nil
 }
 
+// Add appends a task to the column.
+//
+// Important Considerations:
+//
+//  1. Update Priority: The addition of a task can affect the
+//     priorities of the remaining tasks. Calling [UpdatePriorities]
+//     post-removal should be done to update task priorities
+//     accordingly.
+//
+// Note: The priority updating of the tasks in the column is assumed to
+// be handled outside this function, and should be addressed post-add
+// operation.
 func (bc *BoardColumn) Add(task *BoardTask) error {
 	return bc.InsertTask(task, -1)
 }
@@ -510,6 +526,20 @@ func (bc *BoardColumn) InsertTask(task *BoardTask, index int) error {
 	return nil
 }
 
+// Remove removes a task from the column by its index and returns the
+// removed task for buffering.
+//
+// Important Considerations:
+//
+//  1. Buffering. This function returns the removed task, which should
+//     be buffered for potential future reinsertion.
+//  2. Update Priority: The removal of a task can affect the
+//     priorities of the remaining tasks. Calling a sort function
+//     post-removal should be done to update task priorities accordingly.
+//
+// Note: The buffering of the removed task and priority updating is
+// assumed to be handled outside this function, and they should be
+// addressed post-removal operation.
 func (bc *BoardColumn) Remove(index int) (*BoardTask, error) {
 	// Ensure index is in the correct range.
 	if err := bc.Bounds(index); err != nil {
@@ -525,6 +555,7 @@ func (bc *BoardColumn) Remove(index int) (*BoardTask, error) {
 	return &cpy, nil
 }
 
+// Bounds checks if an index is within range.
 func (bc BoardColumn) Bounds(index int) error {
 	if index < 0 || index >= len(bc.Tasks) {
 		return fmt.Errorf("index %d out of range.", index)
