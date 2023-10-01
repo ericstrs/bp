@@ -874,8 +874,8 @@ func (t *TUI) boardColInputCapture(e *tcell.EventKey) *tcell.EventKey {
 // removal of a board thats referenced by a task in the column and all
 // its children.
 func (t *TUI) removeBoardCol() {
-	node := t.tree.GetCurrentNode()
-	parentBoard, ok := t.getBoardRef(node)
+	parentNode := t.tree.GetCurrentNode()
+	parentBoard, ok := t.getBoardRef(parentNode)
 	if !ok {
 		log.Println("Failed to remove board column: current tree view node isn't of type Board.")
 		return
@@ -890,6 +890,7 @@ func (t *TUI) removeBoardCol() {
 		}
 	}
 
+	column := &t.boardColsData[t.focusedCol]
 	col, err := parentBoard.RemoveColumn(t.focusedCol)
 	if err != nil {
 		log.Printf("Failed to remove board column: %v\n", err)
@@ -899,7 +900,22 @@ func (t *TUI) removeBoardCol() {
 
 	// Update and show board
 	t.showBoard(parentBoard)
-	t.updateTree()
+
+	// Update tree view
+	// Find tree view node that references focused board column
+	for _, node := range parentNode.GetChildren() {
+		c, ok := getColRef(node)
+		if !ok {
+			log.Println("Failed to create board task: tree view node isn't of type Column.")
+			return
+		}
+		if c == column {
+			// Current node is the current column node.
+			parentNode.RemoveChild(node)
+			break
+		}
+	}
+	log.Println("Failed to update tree view: tree view column node not found")
 }
 
 func (t *TUI) pasteBoardCol() {
@@ -923,9 +939,20 @@ func (t *TUI) pasteBoardCol() {
 	// Insert column into board
 	board.InsertColumn(cpy, t.focusedCol+1)
 
-	// Update board and tree view
+	// Update board
 	t.showBoard(board)
-	t.updateTree()
+
+	// Update tree view to include the newly added column
+	// by performing the following:
+	//
+	// 1. Clear the boards children tree view nodes.
+	// 2. Re-add column child nodes which now includes the newly added
+	// column.
+	node.ClearChildren()
+	for _, col := range board.GetColumns() {
+		log.Println(col.GetTitle())
+	}
+	t.addBoardToTree(node, board)
 }
 
 // boardTaskInputCapture captures input interactions specific to the
@@ -1238,6 +1265,12 @@ func (t *TUI) createRootBoardForm() *tview.Form {
 // new board column.
 // This function assumes that a task is currently selected.
 func (t *TUI) createColForm(focusedCol int) (*tview.Form, error) {
+	node := t.tree.GetCurrentNode()
+	board, ok := t.getBoardRef(node)
+	if !ok {
+		return nil, errors.New("current tree view node isn't of type Board")
+		t.closeModal()
+	}
 	var name string
 
 	form := tview.NewForm()
@@ -1249,14 +1282,6 @@ func (t *TUI) createColForm(focusedCol int) (*tview.Form, error) {
 	})
 
 	form.AddButton("Save", func() {
-		node := t.tree.GetCurrentNode()
-		board, ok := t.getBoardRef(node)
-
-		if !ok {
-			//return errors.New("current tree view node isn't of type Board")
-			return
-		}
-
 		column := new(tasks.BoardColumn)
 		column.SetTitle(name)
 
@@ -1335,16 +1360,20 @@ func (t *TUI) createBoardTaskForm(idx int) *tview.Form {
 		// 3. Add updated column to tree view.
 		parentNode := t.tree.GetCurrentNode()
 		if _, ok := t.getBoardRef(parentNode); !ok {
+			t.closeModal()
 			return
 		}
+		foundCol := false
 		// Find tree view node that references focused board column
 		for _, node := range parentNode.GetChildren() {
 			c, ok := getColRef(node)
 			if !ok {
 				log.Println("Failed to create board task: tree view node isn't of type Column.")
+				t.closeModal()
 				return
 			}
 			if c == col {
+				foundCol = true
 				// Current node is the current column node.
 				node.ClearChildren()
 				t.addColToTree(col, node)
@@ -1352,9 +1381,8 @@ func (t *TUI) createBoardTaskForm(idx int) *tview.Form {
 			}
 		}
 
-		switch createChildBoard {
-		case true:
-		case false:
+		if foundCol == false {
+			log.Println("Failed to update tree view: tree view column node not found")
 		}
 
 		t.closeModal()
@@ -1390,6 +1418,7 @@ func (t *TUI) createAndAddChildBoard(name string, parentTask *tasks.BoardTask) e
 func (t *TUI) editListForm(idx int) (*tview.Form, error) {
 	task, err := t.taskData.GetTask(idx)
 	if err != nil {
+		t.closeModal()
 		return nil, err
 	}
 	name := task.GetName()
