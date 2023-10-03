@@ -438,7 +438,6 @@ func (t *TUI) addBoardToTree(n *tview.TreeNode, b *tasks.Board) {
 
 // addColToTree adds a board columns contents to the tree view.
 func (t *TUI) addColToTree(col *tasks.BoardColumn, columnNode *tview.TreeNode) {
-	log.Println("---------")
 	tasks := col.GetTasks()
 	for i := range tasks {
 		task := tasks[i]
@@ -777,6 +776,28 @@ func (t *TUI) boardInputCapture() {
 
 			t.boardCols[t.focusedCol].SetSelectable(false, false)
 			t.focusedCol--
+			t.boardCols[t.focusedCol].SetSelectable(true, false)
+
+			if focusedOnTable {
+				t.boardCols[t.focusedCol].SetSelectable(false, false)
+			}
+			t.app.SetFocus(t.boardCols[t.focusedCol])
+		case '0':
+			t.boardCols[t.focusedCol].SetSelectable(false, false)
+			t.focusedCol = 0
+			t.boardCols[t.focusedCol].SetSelectable(true, false)
+
+			if focusedOnTable {
+				t.boardCols[t.focusedCol].SetSelectable(false, false)
+			}
+			t.app.SetFocus(t.boardCols[t.focusedCol])
+		case '$':
+			endColIdx := len(t.boardColsData) - 1
+			if t.focusedCol == endColIdx {
+				return event
+			}
+			t.boardCols[t.focusedCol].SetSelectable(false, false)
+			t.focusedCol = endColIdx
 			t.boardCols[t.focusedCol].SetSelectable(true, false)
 
 			if focusedOnTable {
