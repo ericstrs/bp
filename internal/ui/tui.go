@@ -198,8 +198,8 @@ func (t *TUI) showBoard(b *tasks.Board) {
 	t.focusedCol = 0
 }
 
-// updateColumn clears the focused column of the board and updates the
-// focused column's contents.
+// updateColumn clears the given column of the board and updates the
+// given column's contents.
 func (t *TUI) updateColumn(colIdx int) {
 	col := &t.boardColsData[colIdx]
 	table := t.boardCols[colIdx]
@@ -441,7 +441,6 @@ func (t *TUI) addColToTree(col *tasks.BoardColumn, columnNode *tview.TreeNode) {
 	log.Println("---------")
 	tasks := col.GetTasks()
 	for i := range tasks {
-		log.Println("Adding task to col")
 		task := tasks[i]
 		if task.GetHasChild() {
 			childBoard, err := t.treeData.GetBoard(task.GetChildID())
@@ -958,8 +957,11 @@ func (t *TUI) pasteBoardCol() {
 // boardTaskInputCapture captures input interactions specific to the
 // current board task.
 func (t *TUI) boardTaskInputCapture(e *tcell.EventKey, row int) *tcell.EventKey {
-	if e.Rune() == 'L' || e.Key() == tcell.KeyEnter {
+	if e.Rune() == 'L' {
 		t.enterSubBoard(row)
+	}
+	if e.Key() == tcell.KeyEnter {
+		t.cycleBoardTask(row)
 	}
 
 	switch e.Rune() {
@@ -986,6 +988,42 @@ func (t *TUI) boardTaskInputCapture(e *tcell.EventKey, row int) *tcell.EventKey 
 		t.toggleBoardTaskDesc(row)
 	}
 	return e
+}
+
+// cycleBoardTask moves a task to the next column with wrap around.
+func (t *TUI) cycleBoardTask(row int) {
+	parentNode := t.tree.GetCurrentNode()
+	board, ok := t.getBoardRef(parentNode)
+	if !ok {
+		log.Println("Failed to move board task: current tree view node isn't of type Board.")
+		return
+	}
+
+	newColIdx := (t.focusedCol + 1) % len(board.GetColumns())
+	// If there is only one column for the current board, do nothing.
+	if newColIdx == t.focusedCol {
+		return
+	}
+	col := &t.boardColsData[t.focusedCol]
+	newCol := &t.boardColsData[newColIdx]
+
+	// Remove task from focused column
+	idx := t.calcTaskIdxBoard(row, t.rightPanelWidth)
+	task, err := col.Remove(idx)
+	if err != nil {
+		log.Printf("Failed to move board task: %v\n", err)
+		return
+	}
+	t.updateColumn(t.focusedCol)
+
+	// Add task to next column
+	newCol.InsertTask(task, 0)
+	t.updateColumn(newColIdx)
+
+	// Update tree view to show moved task by clearing entire board and
+	// adding it back to the tree.
+	parentNode.ClearChildren()
+	t.addBoardToTree(parentNode, board)
 }
 
 // removeBoardTask deletes and buffers a board task.
