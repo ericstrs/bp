@@ -225,7 +225,7 @@ func (t *TUI) updateColumn(colIdx int) {
 		// If task show description status is set to true, add the task
 		// description to the list.
 		if task.GetShowDesc() {
-			lineWidth := (t.rightPanelWidth / len(t.boardColsData)) - 4
+			lineWidth := calcColWidth(t.rightPanelWidth, len(t.boardColsData))
 			wrappedDesc := WordWrap(task.GetDesc(), lineWidth)
 			for _, line := range wrappedDesc {
 				currentRow++
@@ -237,6 +237,12 @@ func (t *TUI) updateColumn(colIdx int) {
 		}
 		currentRow++
 	}
+}
+
+// calcColWidth calculates the width of a single board column.
+func calcColWidth(rightPanelWidth, numCols int) int {
+	// Accounting for two borders: borderWidth + borderWidth = 4
+	return (rightPanelWidth / numCols) - 4
 }
 
 // showTreeView clears the right panel and sets the tree view.
@@ -285,6 +291,7 @@ func (t *TUI) calcTaskIdxBoard(row, colWidth int) int {
 
 	// Iterate through each row up to the selected row
 	for i := 0; i < row; i++ {
+		log.Println("Row: ", row)
 		task, err := t.boardColsData[t.focusedCol].GetTask(taskIdx)
 		if err != nil {
 			log.Printf("Failed to calculate board task index: %v\n", err)
@@ -821,7 +828,8 @@ func (t *TUI) boardInputCapture() {
 // Assumuption: Focus in currently on a task.
 func (t *TUI) enterSubBoard(row int) {
 	col := &t.boardColsData[t.focusedCol]
-	task, err := col.GetTask(t.calcTaskIdxBoard(row, t.rightPanelWidth))
+	lineWidth := calcColWidth(t.rightPanelWidth, len(t.boardColsData))
+	task, err := col.GetTask(t.calcTaskIdxBoard(row, lineWidth))
 	if err != nil {
 		log.Printf("Failed to enter sub-board: %v\n", err)
 		return
@@ -992,10 +1000,12 @@ func (t *TUI) boardTaskInputCapture(e *tcell.EventKey, row int) *tcell.EventKey 
 			t.boardCols[t.focusedCol].SetSelectable(false, false)
 		}
 	case 'a': // add board task underneath current task
-		form := t.createBoardTaskForm(t.calcTaskIdxBoard(row, t.rightPanelWidth))
+		lineWidth := calcColWidth(t.rightPanelWidth, len(t.boardColsData))
+		form := t.createBoardTaskForm(t.calcTaskIdxBoard(row, lineWidth))
 		t.showModal(form)
 	case 'e': // edit board tasks
-		form, err := t.editBoardTaskForm(t.calcTaskIdxBoard(row, t.rightPanelWidth))
+		lineWidth := calcColWidth(t.rightPanelWidth, len(t.boardColsData))
+		form, err := t.editBoardTaskForm(t.calcTaskIdxBoard(row, lineWidth))
 		if err != nil {
 			log.Printf("Failed to edit board task: %v\n", err)
 			return e
@@ -1029,7 +1039,8 @@ func (t *TUI) cycleBoardTask(row int) {
 	newCol := &t.boardColsData[newColIdx]
 
 	// Remove task from focused column
-	idx := t.calcTaskIdxBoard(row, t.rightPanelWidth)
+	lineWidth := calcColWidth(t.rightPanelWidth, len(t.boardColsData))
+	idx := t.calcTaskIdxBoard(row, lineWidth)
 	task, err := col.Remove(idx)
 	if err != nil {
 		log.Printf("Failed to move board task: %v\n", err)
@@ -1058,7 +1069,8 @@ func (t *TUI) removeBoardTask(row int) {
 	col := &t.boardColsData[t.focusedCol]
 
 	// Delete task from focused column
-	idx := t.calcTaskIdxBoard(row, t.rightPanelWidth)
+	lineWidth := calcColWidth(t.rightPanelWidth, len(t.boardColsData))
+	idx := t.calcTaskIdxBoard(row, lineWidth)
 	task, err := col.Remove(idx)
 	if err != nil {
 		log.Printf("Failed to remove and buffer task: %v\n", err)
@@ -1094,7 +1106,8 @@ func (t *TUI) pasteBoardTask(row int) {
 		return
 	}
 
-	idx := t.calcTaskIdxBoard(row, t.rightPanelWidth)
+	lineWidth := calcColWidth(t.rightPanelWidth, len(t.boardColsData))
+	idx := t.calcTaskIdxBoard(row, lineWidth)
 
 	// Read from buffer
 	task := t.treeData.TaskBuff.GetTaskBuff()
@@ -1133,11 +1146,13 @@ func (t *TUI) pasteBoardTask(row int) {
 
 // toggleBoardTaskDesc toggles a board task description.
 func (t *TUI) toggleBoardTaskDesc(row int) {
-	idx := t.calcTaskIdxBoard(row, t.rightPanelWidth)
+	lineWidth := calcColWidth(t.rightPanelWidth, len(t.boardColsData))
+	idx := t.calcTaskIdxBoard(row, lineWidth)
 	// If calculated task index is within bounds, toggle task show
 	// description status, and update rendered list.
 	task, err := t.boardColsData[t.focusedCol].GetTask(idx)
 	if err != nil {
+		log.Printf("Failed to toggle board task description: %v\n", err)
 		return
 	}
 	task.ShowDesc = !task.ShowDesc
