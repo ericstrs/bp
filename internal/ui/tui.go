@@ -922,7 +922,7 @@ func (t *TUI) removeBoardCol() {
 		}
 	}
 
-	column := &t.boardColsData[t.focusedCol]
+	//column := &t.boardColsData[t.focusedCol]
 	col, err := parentBoard.RemoveColumn(t.focusedCol)
 	if err != nil {
 		log.Printf("Failed to remove board column: %v\n", err)
@@ -933,20 +933,12 @@ func (t *TUI) removeBoardCol() {
 	// Update and show board
 	t.showBoard(parentBoard)
 
-	// Find tree view node that references focused board column
-	for _, node := range parentNode.GetChildren() {
-		c, ok := getColRef(node)
-		if !ok {
-			log.Println("Failed to create board task: tree view node isn't of type Column.")
-			return
-		}
-		if c == column {
-			// Current node is the current column node.
-			parentNode.RemoveChild(node)
-			break
-		}
-	}
-	log.Println("Failed to update tree view: tree view column node not found")
+	// Update tree view by performing the following:
+	//
+	// 1. Clear the boards children tree view nodes.
+	// 2. Re-add column child nodes which now excludes the removes column
+	parentNode.ClearChildren()
+	t.addBoardToTree(parentNode, parentBoard)
 }
 
 func (t *TUI) pasteBoardCol() {
