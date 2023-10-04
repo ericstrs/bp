@@ -261,10 +261,9 @@ func (tree *BoardTree) SetCurrentBoardID(id int) { tree.CurrentBoardID = id }
 
 // NewBoard creates and returns a default board. A default board
 // consists of three empty columns: TODO, Working On, and Done.
-func (tree *BoardTree) NewBoard(name string) *Board {
+func (tree *BoardTree) NewBoard(title string) *Board {
 	// Create a new board
-	board := new(Board)
-	board.SetTitle(name)
+	board := &Board{Title: title}
 	tree.BoardCounter++
 	board.SetID(tree.BoardCounter)
 
