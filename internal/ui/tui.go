@@ -492,7 +492,7 @@ func (t *TUI) addColToTree(col *tasks.BoardColumn, columnNode *tview.TreeNode) {
 
 		taskNode := tview.NewTreeNode(task.GetName()).
 			SetReference(&task).
-			SetSelectable(true)
+			SetSelectable(false)
 		columnNode.AddChild(taskNode)
 	}
 }
@@ -909,7 +909,6 @@ func (t *TUI) enterSubBoard(row int) {
 func (t *TUI) navBack() {
 	prevNode := t.pop()
 	if prevNode == nil {
-		log.Println("Empty stack")
 		return
 	}
 	board, ok := t.getBoardRef(prevNode)
@@ -1893,7 +1892,6 @@ func InitForm() {
 
 // push adds the current node to the navigation stack.
 func (t *TUI) push(node *tview.TreeNode) {
-	log.Println("push")
 	t.navStack = append(t.navStack, node)
 }
 
@@ -1901,7 +1899,6 @@ func (t *TUI) push(node *tview.TreeNode) {
 // the previous board.
 func (t *TUI) pop() *tview.TreeNode {
 	if len(t.navStack) > 1 {
-		log.Println("pop")
 		t.navStack = t.navStack[:len(t.navStack)-1]
 		return t.navStack[len(t.navStack)-1]
 	}
