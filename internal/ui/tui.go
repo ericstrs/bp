@@ -123,8 +123,30 @@ func (t *TUI) InitTree() {
 	t.tree.SetSelectedFunc(func(node *tview.TreeNode) {
 		if node.IsExpanded() {
 			node.Collapse()
+			switch ref := node.GetReference().(type) {
+			case NodeRef:
+				board, ok := t.getBoardRef(node)
+				if !ok {
+					return
+				}
+				node.SetText("▸ " + board.GetTitle())
+			case *tasks.BoardColumn:
+				node.SetText("▸ " + ref.GetTitle())
+			case *tasks.BoardTask:
+			}
 		} else {
 			node.Expand()
+			switch ref := node.GetReference().(type) {
+			case NodeRef:
+				board, ok := t.getBoardRef(node)
+				if !ok {
+					return
+				}
+				node.SetText("▾ " + board.GetTitle())
+			case *tasks.BoardColumn:
+				node.SetText("▾ " + ref.GetTitle())
+			case *tasks.BoardTask:
+			}
 		}
 	})
 }
@@ -291,7 +313,6 @@ func (t *TUI) calcTaskIdxBoard(row, colWidth int) int {
 
 	// Iterate through each row up to the selected row
 	for i := 0; i < row; i++ {
-		log.Println("Row: ", row)
 		task, err := t.boardColsData[t.focusedCol].GetTask(taskIdx)
 		if err != nil {
 			log.Printf("Failed to calculate board task index: %v\n", err)
@@ -420,7 +441,7 @@ func (t *TUI) updateTree() {
 // addRootBoardToTree
 func (t *TUI) addRootBoardToTree(board *tasks.Board) {
 	nr := NodeRef{ID: board.GetID(), Type: "Board"}
-	boardNode := tview.NewTreeNode("# " + board.GetTitle()).
+	boardNode := tview.NewTreeNode("▾ " + board.GetTitle()).
 		SetReference(nr).
 		SetColor(tcell.ColorGreen).
 		SetSelectable(true)
@@ -434,7 +455,7 @@ func (t *TUI) addRootBoardToTree(board *tasks.Board) {
 func (t *TUI) addBoardToTree(n *tview.TreeNode, b *tasks.Board) {
 	columns := b.GetColumns()
 	for i := range columns {
-		columnNode := tview.NewTreeNode(columns[i].GetTitle()).
+		columnNode := tview.NewTreeNode("▾ " + columns[i].GetTitle()).
 			SetReference(&columns[i]).
 			SetSelectable(true)
 		n.AddChild(columnNode)
@@ -455,7 +476,7 @@ func (t *TUI) addColToTree(col *tasks.BoardColumn, columnNode *tview.TreeNode) {
 				return
 			}
 			nr := NodeRef{ID: childBoard.GetID(), Type: "Board"}
-			childNode := tview.NewTreeNode("# " + childBoard.GetTitle()).
+			childNode := tview.NewTreeNode("▾ " + childBoard.GetTitle()).
 				SetReference(nr).
 				SetColor(tcell.ColorGreen).
 				SetSelectable(true)
