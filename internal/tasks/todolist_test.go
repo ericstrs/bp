@@ -119,14 +119,6 @@ func ExampleRemove() {
 		return
 	}
 
-	/*
-		cpy, ok := taskable.(TodoTask)
-		if !ok {
-			fmt.Println("Type assetion failed")
-			return
-		}
-	*/
-
 	fmt.Printf("Removed task: %q\n", cpy.Name)
 	fmt.Println("Remaining tasks:")
 

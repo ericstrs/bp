@@ -42,10 +42,10 @@ func ExampleSetName() {
 	// Task name: "Clean room"
 }
 
-func ExampleGetDescription() {
+func ExampleGetDesc() {
 	var t Task
 	t = Task{Description: "Buying groceries entails taking inventory of what you have and what you need, and then taking the trip to the store."}
-	fmt.Printf("Task description: %q\n", t.GetDescription())
+	fmt.Printf("Task description: %q\n", t.GetDesc())
 
 	// Output:
 	// Task description: "Buying groceries entails taking inventory of what you have and what you need, and then taking the trip to the store."
@@ -53,7 +53,7 @@ func ExampleGetDescription() {
 
 func ExampleSetDescription() {
 	var t Task
-	t.SetDescription("Cleaning room consists of cleaing your desk and taking out the trash.")
+	t.SetDesc("Cleaning room consists of cleaing your desk and taking out the trash.")
 	fmt.Printf("Task description: %q\n", t.Description)
 
 	// Output:
