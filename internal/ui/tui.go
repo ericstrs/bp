@@ -31,8 +31,11 @@ type TUI struct {
 	list     *tview.Table
 	taskData *tasks.TodoList
 
-	tree          *tview.TreeView
-	treeData      *tasks.BoardTree
+	tree     *tview.TreeView
+	treeData *tasks.BoardTree
+
+	navStack []*tview.TreeNode
+
 	board         *tview.Grid
 	boardCols     []*tview.Table
 	boardColsData []tasks.BoardColumn
@@ -274,6 +277,8 @@ func (t *TUI) showTreeView() {
 	// Set right panel content to the tree view. This will override a
 	// board being dislayed.
 	t.rightPanel.AddItem(t.tree, 0, 0, 1, 1, 0, 0, true)
+
+	t.clearNavStack()
 
 	// Assert focus on the right panel. This is needed for tree input
 	// capture to work.
@@ -681,6 +686,7 @@ func (t *TUI) treeInputCapture() {
 				return event
 			}
 			t.showBoard(board)
+			t.push(node)
 		case 'a':
 			// If node is the root node, create a new root board.
 			node := t.tree.GetCurrentNode()
@@ -810,6 +816,8 @@ func (t *TUI) boardInputCapture() {
 				t.boardCols[t.focusedCol].SetSelectable(false, false)
 			}
 			t.app.SetFocus(t.boardCols[t.focusedCol])
+		case 'H':
+			t.navBack()
 		case '0':
 			t.boardCols[t.focusedCol].SetSelectable(false, false)
 			t.focusedCol = 0
@@ -887,6 +895,7 @@ func (t *TUI) enterSubBoard(row int) {
 					if board == childBoard {
 						t.tree.SetCurrentNode(n)
 						t.showBoard(childBoard)
+						t.push(n)
 						return
 					}
 				}
@@ -894,6 +903,23 @@ func (t *TUI) enterSubBoard(row int) {
 		}
 		log.Println("Failed to update tree view: tree view column node not found")
 	}
+}
+
+// navBack goes back to the previous sub-board when viewing a board.
+func (t *TUI) navBack() {
+	prevNode := t.pop()
+	if prevNode == nil {
+		log.Println("Empty stack")
+		return
+	}
+	board, ok := t.getBoardRef(prevNode)
+	if !ok {
+		log.Println("Failed to navigate back to previous board: popped stack node doesn't reference a board")
+		return
+	}
+
+	t.tree.SetCurrentNode(prevNode)
+	t.showBoard(board)
 }
 
 // boardColInputCapture captures input interactions specific to the
@@ -1863,4 +1889,26 @@ func InitForm() {
 	if err := app.SetRoot(form, true).Run(); err != nil {
 		panic(err)
 	}
+}
+
+// push adds the current node to the navigation stack.
+func (t *TUI) push(node *tview.TreeNode) {
+	log.Println("push")
+	t.navStack = append(t.navStack, node)
+}
+
+// pop removes the current node from the navigation stack and returns
+// the previous board.
+func (t *TUI) pop() *tview.TreeNode {
+	if len(t.navStack) > 1 {
+		log.Println("pop")
+		t.navStack = t.navStack[:len(t.navStack)-1]
+		return t.navStack[len(t.navStack)-1]
+	}
+	return nil
+}
+
+// clear clears the navigation stack.
+func (t *TUI) clearNavStack() {
+	t.navStack = nil
 }
