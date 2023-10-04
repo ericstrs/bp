@@ -11,9 +11,10 @@ type TodoTask struct {
 }
 
 type TodoList struct {
-	Title  string     `yaml:"title"`
-	Tasks  []TodoTask `yaml:"tasks"`
-	buffer *TodoTask
+	Title       string     `yaml:"title"`
+	Tasks       []TodoTask `yaml:"tasks"`
+	buffer      *TodoTask
+	TaskCounter int `yaml:"task_counter"`
 }
 
 //var _ TaskList = &TodoList{}
@@ -130,6 +131,29 @@ func (t *TodoList) Remove(index int) (*TodoTask, error) {
 
 	return &cpy, nil
 }
+
+func (t *TodoTask) Copy(list *TodoList) TodoTask {
+	list.IncrementTaskCtr()
+	newTask := &Task{
+		Id:          list.GetTaskCtr(),
+		Name:        t.Name,
+		Description: t.Description,
+		ShowDesc:    t.ShowDesc,
+		Started:     t.Started,
+		Finished:    t.Finished,
+		Priority:    t.Priority,
+	}
+
+	newTodoTask := TodoTask{
+		Task:   newTask,
+		IsCore: t.IsCore,
+	}
+	return newTodoTask
+}
+
+func (t *TodoList) IncrementTaskCtr() { t.TaskCounter++ }
+
+func (t *TodoList) GetTaskCtr() int { return t.TaskCounter }
 
 // Bounds checks if an index is within range.
 func (t *TodoList) Bounds(index int) error {

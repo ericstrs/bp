@@ -658,7 +658,8 @@ func (t *TUI) deleteListTask(idx int) error {
 // pasteListTask pastes buffered list task.
 func (t *TUI) pasteListTask(idx int) {
 	task := t.taskData.Buffer()
-	t.taskData.Add(task, idx+1)
+	cpy := task.Copy(t.taskData)
+	t.taskData.Add(&cpy, idx+1)
 	t.taskData.UpdatePriorities(idx + 1)
 	t.filterAndUpdateList(t.leftPanelWidth)
 }
@@ -1337,7 +1338,8 @@ func (t *TUI) createListForm(idx int) *tview.Form {
 		task.SetDesc(description)
 		task.SetCore(isCore)
 		task.SetPriority(idx + 1)
-		task.SetID(idx + 1)
+		t.taskData.IncrementTaskCtr()
+		task.SetID(t.taskData.GetTaskCtr())
 		t.taskData.Add(task, idx+1)
 		t.taskData.UpdatePriorities(idx + 1)
 
