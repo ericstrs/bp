@@ -443,7 +443,7 @@ func (t *TUI) updateTree() {
 	}
 }
 
-// addRootBoardToTree
+// addRootBoardToTree adds a root board to the tree view.
 func (t *TUI) addRootBoardToTree(board *tasks.Board) {
 	nr := NodeRef{ID: board.GetID(), Type: "Board"}
 	boardNode := tview.NewTreeNode("▾ " + board.GetTitle()).
@@ -1068,12 +1068,12 @@ func (t *TUI) cycleBoardTask(row int) {
 		return
 	}
 
+	col := &t.boardColsData[t.focusedCol]
 	newColIdx := (t.focusedCol + 1) % len(board.GetColumns())
 	// If there is only one column for the current board, do nothing.
 	if newColIdx == t.focusedCol {
 		return
 	}
-	col := &t.boardColsData[t.focusedCol]
 	newCol := &t.boardColsData[newColIdx]
 
 	// Remove task from focused column
@@ -1193,7 +1193,7 @@ func (t *TUI) toggleBoardTaskDesc(row int) {
 		log.Printf("Failed to toggle board task description: %v\n", err)
 		return
 	}
-	task.ShowDesc = !task.ShowDesc
+	task.SetShowDesc(!task.GetShowDesc())
 	t.updateColumn(t.focusedCol)
 }
 
@@ -1849,6 +1849,26 @@ func severConnection(parentTask *tasks.BoardTask, parentBoard, board *tasks.Boar
 	parentBoard.RemoveChild(board.GetID())
 }
 
+// push adds the current node to the navigation stack.
+func (t *TUI) push(node *tview.TreeNode) {
+	t.navStack = append(t.navStack, node)
+}
+
+// pop removes the current node from the navigation stack and returns
+// the previous board.
+func (t *TUI) pop() *tview.TreeNode {
+	if len(t.navStack) > 1 {
+		t.navStack = t.navStack[:len(t.navStack)-1]
+		return t.navStack[len(t.navStack)-1]
+	}
+	return nil
+}
+
+// clear clears the navigation stack.
+func (t *TUI) clearNavStack() {
+	t.navStack = nil
+}
+
 func InitForm() {
 	app := tview.NewApplication()
 	form := tview.NewForm()
@@ -1889,24 +1909,4 @@ func InitForm() {
 	if err := app.SetRoot(form, true).Run(); err != nil {
 		panic(err)
 	}
-}
-
-// push adds the current node to the navigation stack.
-func (t *TUI) push(node *tview.TreeNode) {
-	t.navStack = append(t.navStack, node)
-}
-
-// pop removes the current node from the navigation stack and returns
-// the previous board.
-func (t *TUI) pop() *tview.TreeNode {
-	if len(t.navStack) > 1 {
-		t.navStack = t.navStack[:len(t.navStack)-1]
-		return t.navStack[len(t.navStack)-1]
-	}
-	return nil
-}
-
-// clear clears the navigation stack.
-func (t *TUI) clearNavStack() {
-	t.navStack = nil
 }
