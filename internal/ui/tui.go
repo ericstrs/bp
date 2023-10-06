@@ -890,8 +890,7 @@ func (t *TUI) enterSubBoard(row int) {
 				for _, n := range node.GetChildren() {
 					board, ok := t.getBoardRef(n)
 					if !ok {
-						log.Println("Failed to enter sub-board: tree view node isn't of type Board.")
-						return
+						continue // skip nodes that don't reference a board
 					}
 					if board == childBoard {
 						t.tree.SetCurrentNode(n)
