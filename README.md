@@ -1,4 +1,4 @@
-# do
+# bp (blueprint)
 
 Manage daily todos and longer term projects
 
