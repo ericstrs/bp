@@ -29,21 +29,21 @@ func run() {
 	list := new(t.TodoList)
 	list.SetTitle("Daily TODOs")
 	if err := store.Load("list", &list); err != nil {
-		log.Fatalf("Error loading list:", err)
+		log.Fatalf("Error loading list: %v", err)
 	}
 	tree := new(t.BoardTree)
 	if err := store.Load("boards", &tree); err != nil {
-		log.Fatalf("Error loading boards:", err)
+		log.Fatalf("Error loading boards: %v", err)
 	}
 
 	tui := new(ui.TUI)
 	tui.Init(list, tree)
 
 	if err := store.Save("list", list); err != nil {
-		log.Fatalf("Error saving list:", err)
+		log.Fatalf("Error saving list: %v", err)
 	}
 	if err := store.Save("boards", tree); err != nil {
-		log.Fatalf("Error saving board:", err)
+		log.Fatalf("Error saving board: %v", err)
 	}
 }
 

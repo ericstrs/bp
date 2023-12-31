@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/iuiq/do/internal/tasks"
+	"github.com/iuiq/bp/internal/tasks"
 	"github.com/rivo/tview"
 )
 
@@ -690,7 +690,7 @@ func (t *TUI) toggleTaskDesc(idx int) error {
 func (t *TUI) treeInputCapture() {
 	t.tree.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		switch event.Rune() {
-		case 'l': // Enter board
+		case 'L': // Enter board
 			node := t.tree.GetCurrentNode()
 			board, ok := t.getBoardRef(node)
 			if !ok {

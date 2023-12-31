@@ -1,4 +1,4 @@
-module github.com/iuiq/do
+module github.com/iuiq/bp
 
 go 1.19
 
