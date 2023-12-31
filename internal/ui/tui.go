@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/iuiq/bp/internal/tasks"
+	"github.com/justericg/bp/internal/tasks"
 	"github.com/rivo/tview"
 )
 

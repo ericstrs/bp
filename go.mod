@@ -1,4 +1,4 @@
-module github.com/iuiq/bp
+module github.com/justericg/bp
 
 go 1.19
 

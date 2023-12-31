@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	s "github.com/iuiq/do/internal/storage"
-	t "github.com/iuiq/do/internal/tasks"
-	"github.com/iuiq/do/internal/ui"
+	s "github.com/justericg/bp/internal/storage"
+	t "github.com/justericg/bp/internal/tasks"
+	"github.com/justericg/bp/internal/ui"
 )
 
 func run() {
