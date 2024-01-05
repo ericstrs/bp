@@ -19,9 +19,9 @@ func run() {
 		}
 	}
 
-	yamlPath := os.Getenv("DO_DATA_PATH")
+	yamlPath := os.Getenv("BP_DATA_PATH")
 	if len(yamlPath) == 0 {
-		log.Fatal("Environment variable DO_DATA_PATH must be set")
+		log.Fatal("Environment variable BP_DATA_PATH must be set")
 	}
 
 	store := s.YAMLStorage{Filename: yamlPath}
