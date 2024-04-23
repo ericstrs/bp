@@ -3,7 +3,7 @@
 bp is a kanban manager with nested sub-board support to handle complex projects.
 
 
-https://github.com/justericg/bp/assets/98285990/b92452f5-db64-4349-ae42-9fdbbb618641
+https://github.com/ericstrs/bp/assets/98285990/b92452f5-db64-4349-ae42-9fdbbb618641
 
 
 The traditional TODO list is great for managing immediate tasks, but once the complexity increases it quickly becomes difficult to use. The kanban board is great for mapping out longer-term tasks, but is not the ideal daily task manager. This project is an attempt to integrate the two systems. Additionally, most existing tools aren't focused on breaking down complex problems into their granular parts.
