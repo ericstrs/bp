@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	s "github.com/justericg/bp/internal/storage"
-	t "github.com/justericg/bp/internal/tasks"
-	"github.com/justericg/bp/internal/ui"
+	s "github.com/ericstrs/bp/internal/storage"
+	t "github.com/ericstrs/bp/internal/tasks"
+	"github.com/ericstrs/bp/internal/ui"
 )
 
 func run() {

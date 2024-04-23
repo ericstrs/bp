@@ -1,4 +1,4 @@
-module github.com/justericg/bp
+module github.com/ericstrs/bp
 
 go 1.19
 

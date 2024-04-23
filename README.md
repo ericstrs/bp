@@ -23,7 +23,7 @@ The traditional TODO list is great for managing immediate tasks, but once the co
 The command can be built from source or directly installed:
 
 ```
-go install github.com/justericg/bp/cmd/bp@latest
+go install github.com/ericstrs/bp/cmd/bp@latest
 ```
 
 ## Documentation

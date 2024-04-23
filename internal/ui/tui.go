@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ericstrs/bp/internal/tasks"
 	"github.com/gdamore/tcell/v2"
-	"github.com/justericg/bp/internal/tasks"
 	"github.com/rivo/tview"
 )
 
