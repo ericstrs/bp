@@ -40,10 +40,10 @@ func run() {
 	tui.Init(list, tree)
 
 	if err := store.Save("list", list); err != nil {
-		log.Fatalf("Error saving list: %v", err)
+		log.Printf("Error saving list: %v\n.", err)
 	}
 	if err := store.Save("boards", tree); err != nil {
-		log.Fatalf("Error saving board: %v", err)
+		log.Printf("Error saving board: %v.\n", err)
 	}
 }
 
