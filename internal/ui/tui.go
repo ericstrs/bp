@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	borderWidth = 2 // Boarder width is about two cells
+	borderWidth = 2 // Border is about two cells wide.
 )
 
 type TUI struct {
@@ -45,10 +45,10 @@ type TUI struct {
 
 type NodeRef struct {
 	ID   int
-	Type string // This could be 'Board'
+	Type string // this could be "Board"
 }
 
-// Init intializes the tview app and sets up the UI.
+// Init initializes the tview app and sets up the UI.
 func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	t.taskData = tl
 	t.treeData = tree
@@ -57,12 +57,11 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	t.InitBoard()
 	t.InitTree()
 
-	// Populate tui list and tree view.
-	t.Populate()
+	t.Populate() // populate tui list and tree view
 
 	t.InitLeftPanel()
 	t.InitRightPanel()
-	// Initialize panel focus to left panel
+	// Init panel focus to left panel
 	t.focusedPanel = t.leftPanel
 
 	// Create the main parent grid
@@ -81,7 +80,7 @@ func (t *TUI) Init(tl *tasks.TodoList, tree *tasks.BoardTree) {
 	}
 }
 
-// InitApp initialzes the application.
+// InitApp initializes the application.
 func (t *TUI) InitApp() {
 	t.app = tview.NewApplication()
 	t.appInputCapture()
@@ -101,14 +100,14 @@ func (t *TUI) InitApp() {
 	})
 }
 
-// InitList initialzes the list.
+// InitList initializes the list.
 func (t *TUI) InitList() {
 	t.list = tview.NewTable().
 		SetSelectable(true, false)
 	t.listInputCapture()
 }
 
-// InitBoard initialzes the board.
+// InitBoard initializes the board.
 func (t *TUI) InitBoard() {
 	t.board = tview.NewGrid().
 		SetRows(0).
@@ -116,7 +115,7 @@ func (t *TUI) InitBoard() {
 	t.boardInputCapture()
 }
 
-// InitTree initialzes the tree.
+// InitTree initializes the tree.
 func (t *TUI) InitTree() {
 	root := tview.NewTreeNode("Board Trees")
 	t.tree = tview.NewTreeView().
@@ -154,7 +153,7 @@ func (t *TUI) InitTree() {
 	})
 }
 
-// InitLeftPanel initialzes the left panel.
+// InitLeftPanel initializes the left panel.
 func (t *TUI) InitLeftPanel() {
 	width := 25
 	// Remove two from default width to account for panel borders
@@ -168,7 +167,7 @@ func (t *TUI) InitLeftPanel() {
 	t.leftPanel.SetBorder(true)
 }
 
-// InitRightPanel initialzes the right panel.
+// InitRightPanel initializes the right panel.
 func (t *TUI) InitRightPanel() {
 	// Create right-hand side panel
 	t.rightPanel = tview.NewGrid().
@@ -275,7 +274,7 @@ func (t *TUI) showTreeView() {
 	t.rightPanel.Clear()
 	t.rightPanel.SetTitle("Tree Navigation")
 	// Set right panel content to the tree view. This will override a
-	// board being dislayed.
+	// board being displayed.
 	t.rightPanel.AddItem(t.tree, 0, 0, 1, 1, 0, 0, true)
 
 	t.clearNavStack()
@@ -334,10 +333,10 @@ func (t *TUI) calcTaskIdxBoard(row, colWidth int) int {
 	return taskIdx
 }
 
-// filterAndUpdateList filters out past completed tasks, marks todays
+// filterAndUpdateList filters out past completed tasks, marks today's
 // completed tasks, and updates the tview todo list.
 //
-// Note: Since the list is being cleared and repopulated, the curor will
+// Note: Since the list is being cleared and repopulated, the cursor will
 // always return to the first item in the list. This would be desired
 // when the functionality for moving completed tasks to the end of the
 // list is implemented.
@@ -416,7 +415,7 @@ func WordWrap(text string, lineWidth int) []string {
 	return wrappedLines
 }
 
-// Populate takes the the tasks from the task list and populates the
+// Populate takes the tasks from the task list and populates the
 // list that will be displayed to the user.
 // This function assumes that the left panel width field has been set
 // for the tui struct.
@@ -498,7 +497,7 @@ func (t *TUI) addColToTree(col *tasks.BoardColumn, columnNode *tview.TreeNode) {
 }
 
 // appInputCapture captures input interactions across all displayed
-// tview primatives.
+// tview primitives.
 func (tui *TUI) appInputCapture() {
 	tui.app.SetInputCapture(func(event *tcell.EventKey) *tcell.EventKey {
 		// If tview primitives for user input are currently focused, ignore
@@ -889,7 +888,7 @@ func (t *TUI) boardInputCapture() {
 }
 
 // enterSubBoard enters a sub-board when viewing a board.
-// Assumuption: Focus in currently on a task.
+// Assumption: Focus in currently on a task.
 func (t *TUI) enterSubBoard(row int) {
 	col := &t.boardColsData[t.focusedCol]
 	lineWidth := calcColWidth(t.rightPanelWidth, len(t.boardColsData))
@@ -939,7 +938,7 @@ func (t *TUI) enterSubBoard(row int) {
 	}
 }
 
-// navBack goes back to the previous sub-board when viewing a board.
+// navBack navigates back to the previous sub-board when viewing a board.
 func (t *TUI) navBack() {
 	prevNode := t.pop()
 	if prevNode == nil {
@@ -1459,8 +1458,8 @@ func (t *TUI) createRootBoardForm() *tview.Form {
 }
 
 // createColForm creates and returns a tview form for creating a
-// new board column.
-// This function assumes that a task is currently selected.
+// new board column. This function makes the assumption that a task is
+// currently selected.
 func (t *TUI) createColForm(focusedCol int) (*tview.Form, error) {
 	node := t.tree.GetCurrentNode()
 	board, ok := t.getBoardRef(node)
@@ -1511,8 +1510,8 @@ func (t *TUI) createColForm(focusedCol int) (*tview.Form, error) {
 }
 
 // createBoardTaskForm creates and returns a tview form for creating a
-// new board task.
-// This function assumes that a task is currently selected.
+// new board task. This function makes the assumption that a task is
+// currently selected.
 func (t *TUI) createBoardTaskForm(idx int) *tview.Form {
 	var name, description string
 	var createChildBoard bool
@@ -1893,7 +1892,7 @@ func getTaskRef(n *tview.TreeNode) (*tasks.BoardTask, bool) {
 
 // createConnection establishes a link between a board task and a board.
 func createConnection(parentTask *tasks.BoardTask, parentBoard, board *tasks.Board) {
-	// Estabilsh connection from board to parent task
+	// Establish connection from board to parent task
 	board.SetParentTask(parentTask)
 
 	// Establish connection from parent task to a board
