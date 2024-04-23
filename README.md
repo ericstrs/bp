@@ -73,19 +73,18 @@ Kanban board:
 |----|-----------|
 |<kbd>l</kbd>|Move right|
 |<kbd>L</kbd>|If the current task references a board, enter it|
-|<kbd>h</kbd>|If left most column then return to tree view, otherwise move left|
+|<kbd>h</kbd>|If in left most column then return to tree view, otherwise move left|
 |<kbd>H</kbd>|Navigate back to parent board|
 |<kbd>0</kbd>|Navigate to the left most column|
 |<kbd>$</kbd>|Navigate to the right most column|
-|<kbd>Enter</kbd>|Move the current task to the next board column, with warp around|
+|<kbd>Enter</kbd>|Move the current task to the next board column, with warp around enabled|
 |<kbd>k</kbd>|If the current task is first then switch focus to entire column, otherwise move up|
-|<kbd>a</kbd>|Add new board task underneath the current task|
+|<kbd>a</kbd>|If the column is selected, then add new column to the right, otherwise add new board task underneath the current task|
 |<kbd>e</kbd>|If the entire column is selected, then edit it. Otherwise, add a new board task underneath the current task|
 |<kbd>y</kbd>|If the entire column is selected, then yank it. Otherwise, yank the current task|
 |<kbd>d</kbd>|If the entire column is selected, then delete it and all its sub tasks and sub boards. Otherwise, delete it and all its children.|
 |<kbd>p</kbd>|If the entire column is selected, then paste buffered board column. Otherwise, paste the buffered board task.|
 |<kbd>j</kbd>|If the entire column is selected, then move down to next item|
-|<kbd>a</kbd>|If the entire column is focused, then create a new board to the right of the currently focused column|
 |<kbd>space</kbd>|Toggle task/board description|
 
 Note: Delete operation buffers the deleted item (and all its children if it has any).
